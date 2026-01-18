@@ -5,23 +5,19 @@ It includes endpoints for processing uploaded audio files and audio files from U
 """
 
 import logging
-from datetime import datetime, timezone
-from uuid import uuid4
-
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
     File,
     Form,
+    Query,
     UploadFile,
 )
 
 from app.api.dependencies import get_file_service, get_task_repository
-from app.audio import get_audio_duration, process_audio_file
 from app.core.exceptions import FileValidationError
 from app.core.logging import logger
-from app.domain.entities.task import Task as DomainTask
 from app.domain.repositories.task_repository import ITaskRepository
 from app.files import ALLOWED_EXTENSIONS
 from app.schemas import (
@@ -29,17 +25,14 @@ from app.schemas import (
     ASROptions,
     DiarizationParams,
     Response,
-    SpeechToTextProcessingParams,
-    TaskStatus,
-    TaskType,
     VADOptions,
     WhisperModelParams,
 )
-from app.services import process_audio_common
 from app.services.file_service import FileService
 
 from app.api.callbacks import task_callback_router
 from app.callbacks import validate_callback_url_dependency
+from app.services.speech_to_text_service import process_speech_to_text
 
 
 # Configure logging
@@ -58,6 +51,10 @@ async def speech_to_text(
     vad_options_params: VADOptions = Depends(),
     file: UploadFile = File(...),
     callback_url: str | None = Depends(validate_callback_url_dependency),
+    split_audio: bool = Query(
+        default=False,
+        description="Split stereo audio into separate channels for individual processing",
+    ),
     repository: ITaskRepository = Depends(get_task_repository),
     file_service: FileService = Depends(get_file_service),
 ) -> Response:
@@ -73,6 +70,7 @@ async def speech_to_text(
         vad_options_params (VADOptions): VAD options parameters.
         file (UploadFile): Uploaded audio file.
         callback_url (str | None): Optional URL to call back when processing is complete.
+        split_audio (bool): If True, split stereo audio and process channels separately.
         repository (ITaskRepository): Task repository dependency.
         file_service (FileService): File service dependency.
 
@@ -91,48 +89,19 @@ async def speech_to_text(
     temp_file = file_service.save_upload(file)
     logger.info("%s saved as temporary file: %s", file.filename, temp_file)
 
-    # Process audio
-    audio = process_audio_file(temp_file)
-    audio_duration = get_audio_duration(audio)
-    logger.info("Audio file %s length: %s seconds", file.filename, audio_duration)
-
-    # Create domain task
-    task = DomainTask(
-        uuid=str(uuid4()),
-        status=TaskStatus.processing,
-        file_name=file.filename,
-        audio_duration=audio_duration,
-        language=model_params.language,
-        task_type=TaskType.full_process,
-        task_params={
-            **model_params.model_dump(),
-            **align_params.model_dump(),
-            "asr_options": asr_options_params.model_dump(),
-            "vad_options": vad_options_params.model_dump(),
-            **diarize_params.model_dump(),
-        },
-        callback_url=callback_url,
-        start_time=datetime.now(tz=timezone.utc),
-    )
-
-    identifier = repository.add(task)
-    logger.info("Task added to database: ID %s", identifier)
-
-    audio_params = SpeechToTextProcessingParams(
-        audio=audio,
-        identifier=identifier,
-        vad_options=vad_options_params,
+    return process_speech_to_text(
+        temp_file=temp_file,
+        filename=file.filename,
+        background_tasks=background_tasks,
+        model_params=model_params,
+        align_params=align_params,
+        diarize_params=diarize_params,
         asr_options=asr_options_params,
-        whisper_model_params=model_params,
-        alignment_params=align_params,
-        diarization_params=diarize_params,
+        vad_options=vad_options_params,
+        repository=repository,
+        split_audio=split_audio,
         callback_url=callback_url,
     )
-
-    background_tasks.add_task(process_audio_common, audio_params)
-    logger.info("Background task scheduled for processing: ID %s", identifier)
-
-    return Response(identifier=identifier, message="Task queued")
 
 
 @stt_router.post(
@@ -147,6 +116,10 @@ async def speech_to_text_url(
     vad_options_params: VADOptions = Depends(),
     url: str = Form(...),
     callback_url: str | None = Depends(validate_callback_url_dependency),
+    split_audio: bool = Query(
+        default=False,
+        description="Split stereo audio into separate channels for individual processing",
+    ),
     repository: ITaskRepository = Depends(get_task_repository),
     file_service: FileService = Depends(get_file_service),
 ) -> Response:
@@ -162,6 +135,7 @@ async def speech_to_text_url(
         vad_options_params (VADOptions): VAD options parameters.
         url (str): URL of the audio file.
         callback_url (str | None): Optional URL to call back when processing is complete.
+        split_audio (bool): If True, split stereo audio and process channels separately.
         repository (ITaskRepository): Task repository dependency.
         file_service (FileService): File service dependency.
 
@@ -177,45 +151,17 @@ async def speech_to_text_url(
     # Validate extension
     file_service.validate_file_extension(temp_audio_file, ALLOWED_EXTENSIONS)
 
-    # Process audio
-    audio = process_audio_file(temp_audio_file)
-    logger.info("Audio file processed: duration %s seconds", get_audio_duration(audio))
-
-    # Create domain task
-    task = DomainTask(
-        uuid=str(uuid4()),
-        status=TaskStatus.processing,
-        file_name=filename,
-        audio_duration=get_audio_duration(audio),
-        language=model_params.language,
-        task_type=TaskType.full_process,
-        task_params={
-            **model_params.model_dump(),
-            **align_params.model_dump(),
-            "asr_options": asr_options_params.model_dump(),
-            "vad_options": vad_options_params.model_dump(),
-            **diarize_params.model_dump(),
-        },
-        url=url,
-        callback_url=callback_url,
-        start_time=datetime.now(tz=timezone.utc),
-    )
-
-    identifier = repository.add(task)
-    logger.info("Task added to database: ID %s", identifier)
-
-    audio_params = SpeechToTextProcessingParams(
-        audio=audio,
-        identifier=identifier,
-        vad_options=vad_options_params,
+    return process_speech_to_text(
+        temp_file=temp_audio_file,
+        filename=filename,
+        background_tasks=background_tasks,
+        model_params=model_params,
+        align_params=align_params,
+        diarize_params=diarize_params,
         asr_options=asr_options_params,
-        whisper_model_params=model_params,
-        alignment_params=align_params,
-        diarization_params=diarize_params,
+        vad_options=vad_options_params,
+        repository=repository,
+        split_audio=split_audio,
         callback_url=callback_url,
+        url=url,
     )
-
-    background_tasks.add_task(process_audio_common, audio_params)
-    logger.info("Background task scheduled for processing: ID %s", identifier)
-
-    return Response(identifier=identifier, message="Task queued")

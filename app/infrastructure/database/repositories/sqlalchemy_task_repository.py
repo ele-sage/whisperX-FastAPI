@@ -181,3 +181,32 @@ class SQLAlchemyTaskRepository:
             self.session.rollback()
             logger.error(f"Failed to delete task {identifier}: {str(e)}")
             return False
+
+    def get_by_parent_id(self, parent_task_id: str) -> list[DomainTask]:
+        """
+        Get all child tasks by parent task UUID.
+
+        Args:
+            parent_task_id: The UUID of the parent task
+
+        Returns:
+            list[DomainTask]: List of child Task entities
+        """
+        try:
+            orm_tasks = (
+                self.session.query(ORMTask)
+                .filter(ORMTask.parent_task_id == parent_task_id)
+                .all()
+            )
+            domain_tasks = [to_domain(orm_task) for orm_task in orm_tasks]
+
+            logger.debug(
+                f"Retrieved {len(domain_tasks)} child tasks for parent: {parent_task_id}"
+            )
+            return domain_tasks
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Failed to get child tasks for parent {parent_task_id}: {str(e)}"
+            )
+            return []

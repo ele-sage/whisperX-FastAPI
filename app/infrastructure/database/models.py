@@ -78,6 +78,12 @@ class Task(Base):
     error: Mapped[str | None] = mapped_column(
         String, nullable=True, comment="Error message, if any, associated with the task"
     )
+    parent_task_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, comment="UUID of the parent task for split audio child tasks"
+    )
+    channel: Mapped[str | None] = mapped_column(
+        String, nullable=True, comment="Audio channel identifier (e.g., 'left', 'right')"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),

@@ -47,6 +47,8 @@ class TaskSimple(BaseModel):
     audio_duration: float | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
+    parent_task_id: str | None = None
+    channel: str | None = None
 
     @classmethod
     def from_domain(cls, task: object) -> "TaskSimple":
@@ -54,7 +56,7 @@ class TaskSimple(BaseModel):
 
         The domain Task is expected to have attributes matching the fields
         used here (uuid, status, task_type, language, file_name, error, url,
-        duration, audio_duration, start_time, end_time).
+        duration, audio_duration, start_time, end_time, parent_task_id, channel).
         """
         return cls(
             identifier=getattr(task, "uuid", ""),
@@ -69,6 +71,8 @@ class TaskSimple(BaseModel):
             audio_duration=getattr(task, "audio_duration", None),
             start_time=getattr(task, "start_time", None),
             end_time=getattr(task, "end_time", None),
+            parent_task_id=getattr(task, "parent_task_id", None),
+            channel=getattr(task, "channel", None),
         )
 
 
@@ -414,6 +418,8 @@ class TaskType(str, Enum):
     diarization = "diarization"
     combine_transcript_diarization = "combine_transcript&diarization"
     full_process = "full_process"
+    split_audio_parent = "split_audio_parent"
+    split_audio_channel = "split_audio_channel"
 
 
 class TaskStatus(str, Enum):

@@ -28,6 +28,8 @@ class Task:
         start_time: Start time of the task execution
         end_time: End time of the task execution
         error: Error message, if any, associated with the task
+        parent_task_id: UUID of the parent task (for split audio child tasks)
+        channel: Audio channel identifier (e.g., 'left', 'right')
         created_at: Date and time of creation
         updated_at: Date and time of last update
     """
@@ -46,6 +48,8 @@ class Task:
     start_time: datetime | None = None
     end_time: datetime | None = None
     error: str | None = None
+    parent_task_id: str | None = None
+    channel: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -138,6 +142,8 @@ class Task:
             "start_time": self.start_time,
             "end_time": self.end_time,
             "error": self.error,
+            "parent_task_id": self.parent_task_id,
+            "channel": self.channel,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
