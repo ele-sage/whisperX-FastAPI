@@ -8,6 +8,7 @@ import numpy as np
 from whisperx import load_audio
 from whisperx.audio import SAMPLE_RATE
 
+from app.core.logging import logger
 from app.files import VIDEO_EXTENSIONS, check_file_extension
 
 
@@ -66,6 +67,34 @@ def get_audio_duration(audio: np.ndarray[Any, np.dtype[np.float32]]) -> float:
         float: The duration of the audio file.
     """
     return len(audio) / SAMPLE_RATE  # type: ignore[no-any-return]
+
+
+def get_audio_duration_from_file(file_path: str) -> float:
+    """
+    Get the duration of an audio/video file using ffprobe without loading it into memory.
+
+    Args:
+        file_path: Path to the media file.
+
+    Returns:
+        float: Duration in seconds.
+    """
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        file_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        logger.error(f"Could not parse duration from ffprobe output: {result.stdout}")
+        return get_audio_duration(load_audio(file_path))
 
 def split_stereo_to_mono(audio_file_path: Union[str, Path]) -> tuple[str, str]:
     """

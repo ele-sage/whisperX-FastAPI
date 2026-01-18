@@ -24,6 +24,7 @@ from app.schemas import (
     AlignmentParams,
     ASROptions,
     DiarizationParams,
+    ProcessingConfig,
     Response,
     VADOptions,
     WhisperModelParams,
@@ -79,13 +80,11 @@ async def speech_to_text(
     """
     logger.info("Received file upload request: %s", file.filename)
 
-    # Validate file using file service
     if file.filename is None:
         raise FileValidationError(filename="unknown", reason="Filename is missing")
 
     file_service.validate_file_extension(file.filename, ALLOWED_EXTENSIONS)
 
-    # Save file using file service
     temp_file = file_service.save_upload(file)
     logger.info("%s saved as temporary file: %s", file.filename, temp_file)
 
@@ -93,11 +92,13 @@ async def speech_to_text(
         temp_file=temp_file,
         filename=file.filename,
         background_tasks=background_tasks,
-        model_params=model_params,
-        align_params=align_params,
-        diarize_params=diarize_params,
-        asr_options=asr_options_params,
-        vad_options=vad_options_params,
+        config=ProcessingConfig(
+            model_params=model_params,
+            align_params=align_params,
+            diarize_params=diarize_params,
+            asr_options=asr_options_params,
+            vad_options=vad_options_params,
+        ),
         repository=repository,
         split_audio=split_audio,
         callback_url=callback_url,
@@ -144,22 +145,22 @@ async def speech_to_text_url(
     """
     logger.info("Received URL for processing: %s", url)
 
-    # Download file using file service
     temp_audio_file, filename = file_service.download_from_url(url)
     logger.info("File downloaded and saved temporarily: %s", temp_audio_file)
 
-    # Validate extension
     file_service.validate_file_extension(temp_audio_file, ALLOWED_EXTENSIONS)
 
     return process_speech_to_text(
         temp_file=temp_audio_file,
         filename=filename,
         background_tasks=background_tasks,
-        model_params=model_params,
-        align_params=align_params,
-        diarize_params=diarize_params,
-        asr_options=asr_options_params,
-        vad_options=vad_options_params,
+        config=ProcessingConfig(
+            model_params=model_params,
+            align_params=align_params,
+            diarize_params=diarize_params,
+            asr_options=asr_options_params,
+            vad_options=vad_options_params,
+        ),
         repository=repository,
         split_audio=split_audio,
         callback_url=callback_url,

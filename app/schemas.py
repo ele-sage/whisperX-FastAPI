@@ -395,6 +395,16 @@ class DiarizationParams(BaseModel):
     )
 
 
+class ProcessingConfig(BaseModel):
+    """Configuration bundle for speech processing parameters."""
+    
+    model_params: WhisperModelParams
+    align_params: AlignmentParams
+    diarize_params: DiarizationParams
+    asr_options: ASROptions
+    vad_options: VADOptions
+
+
 class SpeechToTextProcessingParams(BaseModel):
     """Model for speech-to-text processing parameters."""
 

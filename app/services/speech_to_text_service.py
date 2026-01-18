@@ -1,237 +1,182 @@
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
-
 from fastapi import BackgroundTasks
+from whisperx import load_audio
 
-from app.audio import get_audio_duration, process_audio_file
+from app.audio import (
+    get_audio_duration_from_file,
+    process_audio_file,
+    split_stereo_to_mono,
+)
+from app.callbacks import send_task_result_callback
 from app.core.logging import logger
 from app.domain.entities.task import Task as DomainTask
 from app.domain.repositories.task_repository import ITaskRepository
+from app.infrastructure.database.connection import SessionLocal
+from app.infrastructure.database.repositories.sqlalchemy_task_repository import (
+    SQLAlchemyTaskRepository,
+)
 from app.schemas import (
-    AlignmentParams,
-    ASROptions,
-    DiarizationParams,
+    ProcessingConfig,
     Response,
     SpeechToTextProcessingParams,
     TaskStatus,
     TaskType,
-    VADOptions,
-    WhisperModelParams,
-)
-from app.services.split_audio_service import (
-    create_split_audio_tasks,
-    load_channel_audio,
-    process_split_audio_channel,
 )
 from app.services.whisperx_wrapper_service import process_audio_common
 
-
-def build_task_params(
-    model_params: WhisperModelParams,
-    align_params: AlignmentParams,
-    asr_options: ASROptions,
-    vad_options: VADOptions,
-    diarize_params: DiarizationParams,
-) -> dict[str, Any]:
-    """
-    Build task parameters dictionary from various parameter objects.
-
-    Args:
-        model_params: Whisper model parameters.
-        align_params: Alignment parameters.
-        asr_options: ASR options parameters.
-        vad_options: VAD options parameters.
-        diarize_params: Diarization parameters.
-
-    Returns:
-        dict[str, Any]: Combined task parameters.
-    """
-    return {
-        **model_params.model_dump(),
-        **align_params.model_dump(),
-        "asr_options": asr_options.model_dump(),
-        "vad_options": vad_options.model_dump(),
-        **diarize_params.model_dump(),
-    }
-
+def _create_task(
+    filename: str,
+    audio_duration: float,
+    task_params: dict[str, Any],
+    task_type: str,
+    language: str | None = None,
+    url: str | None = None,
+    callback_url: str | None = None,
+    parent_task_id: str | None = None,
+    channel: str | None = None,
+) -> DomainTask:
+    """Helper to create a DomainTask with common defaults."""
+    return DomainTask(
+        uuid=str(uuid4()),
+        status=TaskStatus.processing,
+        file_name=filename,
+        audio_duration=audio_duration,
+        language=language,
+        task_type=task_type,
+        task_params=task_params,
+        url=url,
+        callback_url=callback_url,
+        parent_task_id=parent_task_id,
+        channel=channel,
+        start_time=datetime.now(tz=timezone.utc),
+    )
 
 def process_speech_to_text(
     temp_file: str,
     filename: str,
     background_tasks: BackgroundTasks,
-    model_params: WhisperModelParams,
-    align_params: AlignmentParams,
-    diarize_params: DiarizationParams,
-    asr_options: ASROptions,
-    vad_options: VADOptions,
+    config: ProcessingConfig,
     repository: ITaskRepository,
     split_audio: bool,
     callback_url: str | None = None,
     url: str | None = None,
 ) -> Response:
-    """
-    Process a speech-to-text request for an audio file.
-
-    This function handles both standard and split audio processing modes,
-    creating appropriate tasks and scheduling background processing.
-
-    Args:
-        temp_file: Path to the temporary audio file.
-        filename: Original filename.
-        background_tasks: FastAPI background tasks handler.
-        model_params: Whisper model parameters.
-        align_params: Alignment parameters.
-        diarize_params: Diarization parameters.
-        asr_options: ASR options parameters.
-        vad_options: VAD options parameters.
-        repository: Task repository dependency.
-        split_audio: If True, split stereo audio and process channels separately.
-        callback_url: Optional URL to notify when the task is done.
-        url: Optional source URL (for URL-based requests).
-
-    Returns:
-        Response: Confirmation message with task identifier.
-    """
-    audio = process_audio_file(temp_file)
-    audio_duration = get_audio_duration(audio)
+    """Process a speech-to-text request for an audio file."""
+    audio_duration = get_audio_duration_from_file(temp_file)
     logger.info("Audio file %s length: %s seconds", filename, audio_duration)
 
-    task_params = build_task_params(
-        model_params=model_params,
-        align_params=align_params,
-        asr_options=asr_options,
-        vad_options=vad_options,
-        diarize_params=diarize_params,
-    )
+    task_params = {
+        **config.model_params.model_dump(),
+        **config.align_params.model_dump(),
+        "asr_options": config.asr_options.model_dump(),
+        "vad_options": config.vad_options.model_dump(),
+        **config.diarize_params.model_dump(),
+    }
 
     if split_audio:
         task_params.update({"min_speakers": 1, "max_speakers": 1})
-
+        
+        task = _create_task(
+            filename=filename,
+            audio_duration=audio_duration,
+            task_params=task_params,
+            task_type=TaskType.split_audio_parent,
+            language=config.model_params.language,
+            url=url,
+            callback_url=callback_url,
+        )
+        task_id = repository.add(task)
+        logger.info("Split audio parent task added: ID %s", task_id)
+        
         return _process_split_audio(
+            parent_id=task_id,
             temp_file=temp_file,
             filename=filename,
             audio_duration=audio_duration,
             task_params=task_params,
             background_tasks=background_tasks,
-            model_params=model_params,
-            align_params=align_params,
-            diarize_params=diarize_params,
-            asr_options=asr_options,
-            vad_options=vad_options,
+            config=config,
             repository=repository,
-            callback_url=callback_url,
-            url=url,
         )
 
-    return _process_standard_audio(
-        audio=audio,
+    task = _create_task(
         filename=filename,
         audio_duration=audio_duration,
         task_params=task_params,
-        background_tasks=background_tasks,
-        model_params=model_params,
-        align_params=align_params,
-        diarize_params=diarize_params,
-        asr_options=asr_options,
-        vad_options=vad_options,
-        repository=repository,
-        callback_url=callback_url,
+        task_type=TaskType.full_process,
+        language=config.model_params.language,
         url=url,
+        callback_url=callback_url,
     )
+    task_id = repository.add(task)
+    logger.info("Task added to database: ID %s", task_id)
+
+    audio_params = SpeechToTextProcessingParams(
+        audio=process_audio_file(temp_file),
+        identifier=task_id,
+        vad_options=config.vad_options,
+        asr_options=config.asr_options,
+        whisper_model_params=config.model_params,
+        alignment_params=config.align_params,
+        diarization_params=config.diarize_params,
+        callback_url=callback_url,
+    )
+    background_tasks.add_task(process_audio_common, audio_params)
+    logger.info("Background task scheduled: ID %s", task_id)
+
+    return Response(identifier=task_id, message="Task queued")
 
 
 def _process_split_audio(
+    parent_id: str,
     temp_file: str,
     filename: str,
     audio_duration: float,
     task_params: dict[str, Any],
     background_tasks: BackgroundTasks,
-    model_params: WhisperModelParams,
-    align_params: AlignmentParams,
-    diarize_params: DiarizationParams,
-    asr_options: ASROptions,
-    vad_options: VADOptions,
+    config: ProcessingConfig,
     repository: ITaskRepository,
-    callback_url: str | None = None,
-    url: str | None = None,
 ) -> Response:
     """
     Handle split audio processing mode.
 
     Creates a parent task and two child tasks for left/right channels,
     then schedules background processing for each channel.
-
-    Args:
-        temp_file: Path to the temporary audio file.
-        filename: Original filename.
-        audio_duration: Duration of the audio in seconds.
-        task_params: Combined task parameters.
-        background_tasks: FastAPI background tasks handler.
-        model_params: Whisper model parameters.
-        align_params: Alignment parameters.
-        diarize_params: Diarization parameters.
-        asr_options: ASR options parameters.
-        vad_options: VAD options parameters.
-        repository: Task repository dependency.
-        callback_url: Optional URL to notify when the task is done.
-        url: Optional source URL (for URL-based requests).
-
-    Returns:
-        Response: Confirmation message with parent task identifier.
     """
-    parent_task = DomainTask(
-        uuid=str(uuid4()),
-        status=TaskStatus.processing,
-        file_name=filename,
-        audio_duration=audio_duration,
-        language=model_params.language,
-        task_type=TaskType.split_audio_parent,
-        task_params=task_params,
-        url=url,
-        callback_url=callback_url,
-        start_time=datetime.now(tz=timezone.utc),
-    )
+    left_file, right_file = split_stereo_to_mono(temp_file)
 
-    parent_id = repository.add(parent_task)
-    logger.info("Parent split audio task added to database: ID %s", parent_id)
+    for channel, channel_file in [("left", left_file), ("right", right_file)]:
+        channel_task_params = {**task_params, "channel_file": channel_file}
+        child_task = _create_task(
+            filename=f"{filename}_{channel}",
+            audio_duration=audio_duration,
+            task_params=channel_task_params,
+            task_type=TaskType.split_audio_channel,
+            language=config.model_params.language,
+            parent_task_id=parent_id,
+            channel=channel,
+        )
+        channel_id = repository.add(child_task)
+        logger.info(
+            "Created split audio child task: %s channel=%s for parent=%s",
+            channel_id,
+            channel,
+            parent_id,
+        )
 
-    left_id, right_id = create_split_audio_tasks(
-        parent_task_id=parent_id,
-        temp_file=temp_file,
-        filename=filename,
-        audio_duration=audio_duration,
-        task_params=task_params,
-        language=model_params.language,
-        callback_url=callback_url,
-        repository=repository,
-    )
-
-    _schedule_channel_task(
-        channel_id=left_id,
-        parent_id=parent_id,
-        channel="left",
-        repository=repository,
-        background_tasks=background_tasks,
-        model_params=model_params,
-        align_params=align_params,
-        diarize_params=diarize_params,
-        asr_options=asr_options,
-        vad_options=vad_options,
-    )
-
-    _schedule_channel_task(
-        channel_id=right_id,
-        parent_id=parent_id,
-        channel="right",
-        repository=repository,
-        background_tasks=background_tasks,
-        model_params=model_params,
-        align_params=align_params,
-        diarize_params=diarize_params,
-        asr_options=asr_options,
-        vad_options=vad_options,
-    )
+        audio = load_audio(child_task.task_params["channel_file"])
+        params = SpeechToTextProcessingParams(
+            audio=audio,
+            identifier=channel_id,
+            vad_options=config.vad_options,
+            asr_options=config.asr_options,
+            whisper_model_params=config.model_params,
+            alignment_params=config.align_params,
+            diarization_params=config.diarize_params,
+        )
+        background_tasks.add_task(_process_split_audio_channel, params, parent_id)
 
     logger.info(
         "Background tasks scheduled for split audio processing: parent=%s",
@@ -241,117 +186,64 @@ def _process_split_audio(
     return Response(identifier=parent_id, message="Split audio task queued")
 
 
-def _schedule_channel_task(
-    channel_id: str,
-    parent_id: str,
-    channel: str,
-    repository: ITaskRepository,
-    background_tasks: BackgroundTasks,
-    model_params: WhisperModelParams,
-    align_params: AlignmentParams,
-    diarize_params: DiarizationParams,
-    asr_options: ASROptions,
-    vad_options: VADOptions,
+def _process_split_audio_channel(
+    params: SpeechToTextProcessingParams,
+    parent_task_id: str,
 ) -> None:
     """
-    Schedule a background task for processing a single audio channel.
-
-    Args:
-        channel_id: UUID of the channel task.
-        parent_id: UUID of the parent task.
-        channel: Channel identifier (left/right).
-        repository: Task repository dependency.
-        background_tasks: FastAPI background tasks handler.
-        model_params: Whisper model parameters.
-        align_params: Alignment parameters.
-        diarize_params: Diarization parameters.
-        asr_options: ASR options parameters.
-        vad_options: VAD options parameters.
+    Process a single audio channel and check if all sibling tasks are complete.
     """
-    task = repository.get_by_id(channel_id)
-    if task and task.task_params:
-        audio = load_channel_audio(task.task_params["channel_file"])
-        params = SpeechToTextProcessingParams(
-            audio=audio,
-            identifier=channel_id,
-            vad_options=vad_options,
-            asr_options=asr_options,
-            whisper_model_params=model_params,
-            alignment_params=align_params,
-            diarization_params=diarize_params,
-        )
-        background_tasks.add_task(
-            process_split_audio_channel, params, parent_id, channel
-        )
+    process_audio_common(params)
+
+    session = SessionLocal()
+    repository: ITaskRepository = SQLAlchemyTaskRepository(session)
+
+    try:
+        _check_and_complete_parent_task(parent_task_id, repository)
+    finally:
+        session.close()
 
 
-def _process_standard_audio(
-    audio: Any,
-    filename: str,
-    audio_duration: float,
-    task_params: dict[str, Any],
-    background_tasks: BackgroundTasks,
-    model_params: WhisperModelParams,
-    align_params: AlignmentParams,
-    diarize_params: DiarizationParams,
-    asr_options: ASROptions,
-    vad_options: VADOptions,
+def _check_and_complete_parent_task(
+    parent_task_id: str,
     repository: ITaskRepository,
-    callback_url: str | None = None,
-    url: str | None = None,
-) -> Response:
-    """
-    Handle standard (non-split) audio processing mode.
+) -> None:
+    """Check if all child tasks are complete and update parent task accordingly."""
+    parent_task = repository.get_by_id(parent_task_id)
+    child_tasks = repository.get_by_parent_id(parent_task_id)
 
-    Creates a single task and schedules background processing.
+    if not parent_task or not child_tasks:
+        logger.warning(f"Parent task {parent_task_id} or child tasks not found/empty")
+        return
 
-    Args:
-        audio: Processed audio data.
-        filename: Original filename.
-        audio_duration: Duration of the audio in seconds.
-        task_params: Combined task parameters.
-        background_tasks: FastAPI background tasks handler.
-        model_params: Whisper model parameters.
-        align_params: Alignment parameters.
-        diarize_params: Diarization parameters.
-        asr_options: ASR options parameters.
-        vad_options: VAD options parameters.
-        repository: Task repository dependency.
-        callback_url: Optional URL to notify when the task is done.
-        url: Optional source URL (for URL-based requests).
+    if not all(t.status in [TaskStatus.completed, TaskStatus.failed] for t in child_tasks):
+        return
 
-    Returns:
-        Response: Confirmation message with task identifier.
-    """
-    task = DomainTask(
-        uuid=str(uuid4()),
-        status=TaskStatus.processing,
-        file_name=filename,
-        audio_duration=audio_duration,
-        language=model_params.language,
-        task_type=TaskType.full_process,
-        task_params=task_params,
-        url=url,
-        callback_url=callback_url,
-        start_time=datetime.now(tz=timezone.utc),
-    )
+    end_time = datetime.now(timezone.utc)
+    failed_tasks = [t for t in child_tasks if t.status == TaskStatus.failed]
 
-    identifier = repository.add(task)
-    logger.info("Task added to database: ID %s", identifier)
+    if failed_tasks:
+        error_msg = "; ".join(f"{t.channel}: {t.error}" for t in failed_tasks if t.error)
+        update_data = {
+            "status": TaskStatus.failed,
+            "error": error_msg,
+            "end_time": end_time,
+        }
+    else:
+        results = {
+            "channels": {t.channel: t.result for t in child_tasks if t.channel and t.result}
+        }
+        total_duration = sum(t.duration for t in child_tasks if t.duration)
+        update_data = {
+            "status": TaskStatus.completed,
+            "result": results,
+            "duration": total_duration,
+            "end_time": end_time,
+        }
 
-    audio_params = SpeechToTextProcessingParams(
-        audio=audio,
-        identifier=identifier,
-        vad_options=vad_options,
-        asr_options=asr_options,
-        whisper_model_params=model_params,
-        alignment_params=align_params,
-        diarization_params=diarize_params,
-        callback_url=callback_url
-    )
+    repository.update(identifier=parent_task_id, update_data=update_data)
+    logger.info(f"Parent task {parent_task_id} marked as {update_data['status']}")
 
-    background_tasks.add_task(process_audio_common, audio_params)
-    logger.info("Background task scheduled for processing: ID %s", identifier)
-
-    return Response(identifier=identifier, message="Task queued")
-
+    if parent_task.callback_url:
+        if task := repository.get_by_id(parent_task_id):
+            send_task_result_callback(task)

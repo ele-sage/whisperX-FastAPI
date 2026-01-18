@@ -14,7 +14,7 @@ from whisperx import (
 )
 from whisperx.diarize import DiarizationPipeline
 
-from app.callbacks import post_task_callback
+from app.callbacks import send_task_result_callback
 from app.core.config import Config
 from app.core.logging import logger
 from app.domain.repositories.task_repository import ITaskRepository
@@ -30,8 +30,6 @@ from app.schemas import (
     AlignedTranscription,
     ComputeType,
     Device,
-    Metadata,
-    Result,
     SpeechToTextProcessingParams,
     TaskStatus,
     WhisperModel,
@@ -417,25 +415,7 @@ def process_audio_common(
             if params.callback_url:
                 task = repository.get_by_id(params.identifier)
                 if task:
-                    metadata = Metadata(
-                        task_type=task.task_type,
-                        task_params=task.task_params,
-                        language=task.language,
-                        file_name=task.file_name,
-                        url=task.url,
-                        callback_url=task.callback_url,
-                        duration=task.duration,
-                        audio_duration=task.audio_duration,
-                        start_time=task.start_time,
-                        end_time=task.end_time,
-                    )
-                    result_payload = Result(
-                        status=task.status,
-                        result=task.result,
-                        metadata=metadata,
-                        error=task.error,
-                    )
-                    post_task_callback(params.callback_url, result_payload.model_dump())
+                    send_task_result_callback(task)
         except Exception as e:
             logger.error(
                 "Failed to send callback for identifier %s: %s",
