@@ -20,6 +20,7 @@ class Response(BaseModel):
 class Metadata(BaseModel):
     """Metadata model for task information."""
 
+    identifier: str
     task_type: str
     task_params: dict[str, Any] | None
     language: str | None

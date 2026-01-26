@@ -167,6 +167,7 @@ def send_task_result_callback(task: Any) -> None:
 
     try:
         metadata = Metadata(
+            identifier=task.uuid,
             task_type=task.task_type,
             task_params=task.task_params,
             language=task.language,

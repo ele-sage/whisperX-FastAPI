@@ -65,6 +65,7 @@ async def get_transcription_status(
         status=task.status,
         result=task.result,
         metadata=Metadata(
+            identifier=task.uuid,
             task_type=task.task_type,
             task_params=task.task_params,
             language=task.language,

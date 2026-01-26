@@ -364,7 +364,15 @@ def process_audio_common(
         )
 
         logger.debug("Starting to combine transcript with diarization results")
-        result = speaker_svc.assign_speakers(diarization_segments, transcript_dict)
+        assigned = speaker_svc.assign_speakers(diarization_segments, transcript_dict)
+        result = {
+            "channels": {
+                "mixed": {
+                    "segments": assigned.get("segments", []),
+                    "word_segments": assigned.get("word_segments", []),
+                }
+            }
+        }
 
         logger.debug("Completed combining transcript with diarization results")
 

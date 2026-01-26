@@ -230,9 +230,17 @@ def _check_and_complete_parent_task(
             "end_time": end_time,
         }
     else:
-        results = {
-            "channels": {t.channel: t.result for t in child_tasks if t.channel and t.result}
-        }
+        channels: dict[str, Any] = {}
+        for task in child_tasks:
+            if not task.channel or not task.result:
+                continue
+            channel_result = task.result
+            if isinstance(channel_result, dict):
+                mixed = channel_result.get("channels", {}).get("mixed")
+                if mixed is not None:
+                    channel_result = mixed
+            channels[task.channel] = channel_result
+        results = {"channels": channels}
         total_duration = sum(t.duration for t in child_tasks if t.duration)
         update_data = {
             "status": TaskStatus.completed,

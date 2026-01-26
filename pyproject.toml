@@ -162,3 +162,7 @@ module = [
     "numpy.*",
 ]
 ignore_missing_imports = true
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["data*"]
