@@ -42,7 +42,7 @@ from app.domain.services.alignment_service import IAlignmentService
 from app.domain.services.diarization_service import IDiarizationService
 from app.domain.services.speaker_assignment_service import ISpeakerAssignmentService
 from app.domain.services.transcription_service import ITranscriptionService
-from app.files import ALLOWED_EXTENSIONS
+from app.files import ALLOWED_EXTENSIONS, safe_remove_file
 from app.schemas import (
     AlignedTranscription,
     AlignmentParams,
@@ -109,7 +109,10 @@ async def transcribe(
     file_service.validate_file_extension(file.filename, ALLOWED_EXTENSIONS)
 
     temp_file = file_service.save_upload(file)
-    audio = process_audio_file(temp_file)
+    try:
+        audio = process_audio_file(temp_file)
+    finally:
+        safe_remove_file(temp_file)
 
     # Create domain task
     task = DomainTask(
@@ -215,7 +218,10 @@ def align(
     file_service.validate_file_extension(file.filename, ALLOWED_EXTENSIONS)
 
     temp_file = file_service.save_upload(file)
-    audio = process_audio_file(temp_file)
+    try:
+        audio = process_audio_file(temp_file)
+    finally:
+        safe_remove_file(temp_file)
 
     # Create domain task
     task = DomainTask(
@@ -287,7 +293,10 @@ async def diarize(
     file_service.validate_file_extension(file.filename, ALLOWED_EXTENSIONS)
 
     temp_file = file_service.save_upload(file)
-    audio = process_audio_file(temp_file)
+    try:
+        audio = process_audio_file(temp_file)
+    finally:
+        safe_remove_file(temp_file)
 
     # Create domain task
     task = DomainTask(

@@ -9,7 +9,7 @@ from whisperx import load_audio
 from whisperx.audio import SAMPLE_RATE
 
 from app.core.logging import logger
-from app.files import VIDEO_EXTENSIONS, check_file_extension
+from app.files import VIDEO_EXTENSIONS, check_file_extension, safe_remove_file
 
 
 def convert_video_to_audio(file: str) -> str:
@@ -52,9 +52,14 @@ def process_audio_file(audio_file: str) -> np.ndarray[Any, np.dtype[np.float32]]
         Audio: The processed audio.
     """
     file_extension = check_file_extension(audio_file)
+    converted_file: str | None = None
     if file_extension in VIDEO_EXTENSIONS:
-        audio_file = convert_video_to_audio(audio_file)
-    return load_audio(audio_file)  # type: ignore[no-any-return]
+        converted_file = convert_video_to_audio(audio_file)
+        audio_file = converted_file
+    audio = load_audio(audio_file)  # type: ignore[no-any-return]
+    if converted_file:
+        safe_remove_file(converted_file)
+    return audio
 
 
 def get_audio_duration(audio: np.ndarray[Any, np.dtype[np.float32]]) -> float:
@@ -95,6 +100,46 @@ def get_audio_duration_from_file(file_path: str) -> float:
     except ValueError:
         logger.error(f"Could not parse duration from ffprobe output: {result.stdout}")
         return get_audio_duration(load_audio(file_path))
+
+def is_stereo_audio(file_path: str) -> bool:
+    """
+    Check if the first audio stream in a media file is stereo
+
+    Args:
+        file_path str: Path to the media file.
+    Returns:
+        bool: True if the file is stereo, False otherwise.
+    """
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=channels",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        file_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except FileNotFoundError:
+        logger.error(f"ffprobe command not found")
+        return False
+    except subprocess.CalledProcessError as e:
+        logger.error(f"ffprobe command failed with exit code {e.returncode}")
+        logger.error(f"ffprobe command failed with exit code {e.returncode}")
+        return False
+
+
+    try:
+        channels = int(result.stdout.strip())
+    except ValueError:
+        logger.error(f"Could not parse channels from ffprobe output: {result.stdout}")
+        return False
+
+    return channels == 2
 
 def split_stereo_to_mono(audio_file_path: Union[str, Path]) -> tuple[str, str]:
     """

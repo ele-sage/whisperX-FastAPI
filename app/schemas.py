@@ -114,6 +114,10 @@ class Word(BaseModel):
     end: float | None = None
     score: float | None = None
 
+class LabeledWord(Word):
+    """Model for a word with optional timing and score information."""
+
+    speaker: str | None = None
 
 class AlignmentSegment(BaseModel):
     """Model for a segment with word alignments."""
@@ -123,12 +127,17 @@ class AlignmentSegment(BaseModel):
     text: str
     words: list[Word]
 
+class LabeledSegment(AlignmentSegment):
+    """Model for a labeled segment of transcription."""
+
+    speaker: str | None = None
+    words: list[LabeledWord]
 
 class AlignedTranscription(BaseModel):
     """Model for aligned transcription with segments and word segments."""
 
-    segments: list[AlignmentSegment]
-    word_segments: list[Word]
+    segments: list[LabeledSegment]
+    word_segments: list[LabeledWord]
 
 
 class DiarizationSegment(BaseModel):

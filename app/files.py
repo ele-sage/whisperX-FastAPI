@@ -67,3 +67,14 @@ def save_temporary_file(temporary_file: Any, original_filename: str) -> str:
         dest.write(temporary_file.read())
 
     return temp_filename
+
+def safe_remove_file(file_path: str) -> None:
+    if not file_path:
+        return
+    try:
+        os.remove(file_path)
+        logger.debug("Removed temporary file: %s", file_path)
+    except FileExistsError:
+        logger.debug("Temporary file already removed: %s", file_path)
+    except OSError as exc:
+        logger.debug("Failed to remove temporary file %s: %s", file_path, exc)

@@ -1,6 +1,7 @@
 """This module provides services for transcribing, diarizing, and aligning audio using Whisper and other models."""
 
 import gc
+import json
 from datetime import datetime
 from typing import Any
 
@@ -260,6 +261,7 @@ def process_audio_common(
     alignment_service: IAlignmentService | None = None,
     diarization_service: IDiarizationService | None = None,
     speaker_service: ISpeakerAssignmentService | None = None,
+    channel_name: str | None = None
 ) -> None:
     """
     Process an audio clip to generate a transcript with speaker labels.
@@ -270,6 +272,7 @@ def process_audio_common(
         alignment_service: Alignment service (defaults to WhisperX if None)
         diarization_service: Diarization service (defaults to WhisperX if None)
         speaker_service: Speaker assignment service (defaults to WhisperX if None)
+        channel_name:
 
     Returns:
         None: The result is saved in the transcription requests dict.
@@ -285,10 +288,6 @@ def process_audio_common(
     # Use provided services or create default WhisperX implementations
     transcription_svc = transcription_service or WhisperXTranscriptionService()
     alignment_svc = alignment_service or WhisperXAlignmentService()
-    diarization_svc = diarization_service or WhisperXDiarizationService(
-        hf_token=Config.HF_TOKEN or ""
-    )
-    speaker_svc = speaker_service or WhisperXSpeakerAssignmentService()
 
     # Create repository for this background task
     session = SessionLocal()
@@ -347,34 +346,33 @@ def process_audio_common(
         )
         transcript = AlignedTranscription(**segments_transcript)
         # removing words within each segment that have missing start, end, or score values
-        filtered_transcript = filter_aligned_transcription(transcript)
+        filtered_transcript = filter_aligned_transcription(transcript, channel_name)
         transcript_dict = filtered_transcript.model_dump()
 
-        logger.debug(
-            "Diarization parameters - device: %s, min_speakers: %s, max_speakers: %s",
-            params.whisper_model_params.device.value,
-            params.diarization_params.min_speakers,
-            params.diarization_params.max_speakers,
-        )
-        diarization_segments = diarization_svc.diarize(
-            audio=params.audio,
-            device=params.whisper_model_params.device.value,
-            min_speakers=params.diarization_params.min_speakers,
-            max_speakers=params.diarization_params.max_speakers,
-        )
+        if channel_name is not None:
+            result = transcript_dict
+        else:
+            diarization_svc = diarization_service or WhisperXDiarizationService(
+                hf_token=Config.HF_TOKEN or ""
+            )
+            speaker_svc = speaker_service or WhisperXSpeakerAssignmentService()
+            logger.debug(
+                "Diarization parameters - device: %s, min_speakers: %s, max_speakers: %s",
+                params.whisper_model_params.device.value,
+                params.diarization_params.min_speakers,
+                params.diarization_params.max_speakers,
+            )
+            diarization_segments = diarization_svc.diarize(
+                audio=params.audio,
+                device=params.whisper_model_params.device.value,
+                min_speakers=params.diarization_params.min_speakers,
+                max_speakers=params.diarization_params.max_speakers,
+            )
 
-        logger.debug("Starting to combine transcript with diarization results")
-        assigned = speaker_svc.assign_speakers(diarization_segments, transcript_dict)
-        result = {
-            "channels": {
-                "mixed": {
-                    "segments": assigned.get("segments", []),
-                    "word_segments": assigned.get("word_segments", []),
-                }
-            }
-        }
+            logger.debug("Starting to combine transcript with diarization results")
+            result = speaker_svc.assign_speakers(diarization_segments, transcript_dict)
 
-        logger.debug("Completed combining transcript with diarization results")
+            logger.debug("Completed combining transcript with diarization results")
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
