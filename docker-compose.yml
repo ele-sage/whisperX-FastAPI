@@ -14,16 +14,10 @@ services:
     container_name: whisperx-container
     env_file:
       - .env
-    environment:
-      # Override DB_URL to persist data in the volume mounted at /data
-      # The .env value (sqlite:///records.db) is kept for local development
-      - DB_URL=sqlite:////data/records.db
     ports:
-      - "8000:8000"
+      - "8072:8000"
     volumes:
-      - "./data/cache:/root/.cache"
-      - "./data/tmp:/tmp"
-      - "./data/db:/data"
-volumes:
-  whisperx-models-cache:
-  whisperx-app-volume:
+      - "~/.cache:/root/.cache"
+      - "./records.db:/app/records.db"
+    tmpfs:
+      - /tmp:size=512m,mode=1777,noexec,nosuid,nodev
