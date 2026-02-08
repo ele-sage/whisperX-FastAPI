@@ -283,11 +283,13 @@ def process_audio_common(
         WhisperXDiarizationService,
         WhisperXSpeakerAssignmentService,
         WhisperXTranscriptionService,
+        Qwen3AlignmentService,
     )
 
     # Use provided services or create default WhisperX implementations
     transcription_svc = transcription_service or WhisperXTranscriptionService()
-    alignment_svc = alignment_service or WhisperXAlignmentService()
+    # alignment_svc = alignment_service or WhisperXAlignmentService()
+    alignment_svc = alignment_service or Qwen3AlignmentService()
 
     # Create repository for this background task
     session = SessionLocal()
