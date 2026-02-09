@@ -127,8 +127,12 @@ class Qwen3AlignmentService:
                     )
                     final_segments.extend(refined_subsegments)
                 else:
-                    # Fallback if no words found
-                    final_segments.append(original_segment)
+                    # Fallback if no words found (e.g. silence or "...")
+                    # We must create a copy and explicitly add an empty words list
+                    # to satisfy the AlignedTranscription schema.
+                    fallback_segment = original_segment.copy()
+                    fallback_segment["words"] = []
+                    final_segments.append(fallback_segment)
 
         return {
             "segments": final_segments,
