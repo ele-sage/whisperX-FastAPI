@@ -277,12 +277,16 @@ def process_audio_common(
     Returns:
         None: The result is saved in the transcription requests dict.
     """
-    # Import here to avoid circular dependency
-    from app.core.container import Container
+    # Import the shared container from dependencies (set once at app startup).
+    # IMPORTANT: Do NOT create Container() here — that creates a new container
+    # with fresh singletons each time, leaking GPU memory.
+    from app.api.dependencies import _container
+
+    if _container is None:
+        raise RuntimeError("DI container not initialized. Was set_container() called at startup?")
 
     # Use provided services or fall back to DI container singletons
     # This ensures models are cached and reused across requests
-    _container = Container()
     transcription_svc = transcription_service or _container.transcription_service()
     alignment_svc = alignment_service or _container.qwen_alignment_service()
 
