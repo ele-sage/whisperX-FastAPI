@@ -56,10 +56,10 @@ def process_audio_file(audio_file: str) -> np.ndarray[Any, np.dtype[np.float32]]
     if file_extension in VIDEO_EXTENSIONS:
         converted_file = convert_video_to_audio(audio_file)
         audio_file = converted_file
-    audio = load_audio(audio_file)  # type: ignore[no-any-return]
+    audio = load_audio(audio_file)
     if converted_file:
         safe_remove_file(converted_file)
-    return audio
+    return audio  # type: ignore[no-any-return]
 
 
 def get_audio_duration(audio: np.ndarray[Any, np.dtype[np.float32]]) -> float:
@@ -103,10 +103,11 @@ def get_audio_duration_from_file(file_path: str) -> float:
 
 def is_stereo_audio(file_path: str) -> bool:
     """
-    Check if the first audio stream in a media file is stereo
+    Check if the first audio stream in a media file is stereo (2 channels).
 
     Args:
-        file_path str: Path to the media file.
+        file_path: Path to the media file.
+
     Returns:
         bool: True if the file is stereo, False otherwise.
     """
@@ -125,13 +126,12 @@ def is_stereo_audio(file_path: str) -> bool:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except FileNotFoundError:
-        logger.error(f"ffprobe command not found")
+        logger.error("`ffprobe` command not found. Ensure FFmpeg is installed and in your system's PATH.")
         return False
     except subprocess.CalledProcessError as e:
-        logger.error(f"ffprobe command failed with exit code {e.returncode}")
-        logger.error(f"ffprobe command failed with exit code {e.returncode}")
+        logger.error(f"ffprobe command failed with exit code {e.returncode}.")
+        logger.error(f"ffprobe stderr: {e.stderr}")
         return False
-
 
     try:
         channels = int(result.stdout.strip())

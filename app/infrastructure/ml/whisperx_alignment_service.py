@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from whisperx import align, load_align_model
 
+from app.core.gpu import gpu_lock
 from app.core.logging import logger
 
 
@@ -14,14 +15,17 @@ class WhisperXAlignmentService:
     """
     WhisperX-based implementation of alignment service.
 
-    This service wraps the WhisperX alignment functionality to align
-    transcripts to audio with precise word-level timestamps.
+    The alignment model is lazily loaded on first call and cached for reuse.
+    Since the model is language-specific, it is reloaded when the language changes.
+    GPU access is serialized via a semaphore so concurrent requests queue safely.
     """
 
     def __init__(self) -> None:
         """Initialize the alignment service."""
         self.model: Any = None
         self.metadata: Any = None
+        self._model_language: str | None = None
+        self._model_device: str | None = None
         self.logger = logger
 
     def align(
@@ -37,78 +41,66 @@ class WhisperXAlignmentService:
         """
         Align transcript to audio using WhisperX alignment.
 
-        Args:
-            transcript: List of transcript segments to align
-            audio: Audio data as numpy array (float32)
-            language_code: Language code of the transcript
-            device: Device to use ('cpu' or 'cuda')
-            align_model: Specific alignment model to use (optional)
-            interpolate_method: Method for handling non-aligned words
-            return_char_alignments: Whether to return character-level alignments
-
-        Returns:
-            Dictionary containing aligned transcript
+        The model is loaded once per language and reused.
+        GPU access is serialized.
         """
-        self.logger.debug(
-            "Starting alignment for language code: %s on device: %s",
-            language_code,
-            device,
-        )
-
-        # Log GPU memory before loading model
-        if torch.cuda.is_available():
+        with gpu_lock("alignment"):
             self.logger.debug(
-                f"GPU memory before loading model - used: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
-                f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
+                "Starting alignment for language code: %s on device: %s",
+                language_code,
+                device,
             )
 
-        self.logger.debug(
-            "Loading align model with config - language_code: %s, device: %s, "
-            "interpolate_method: %s, return_char_alignments: %s",
-            language_code,
-            device,
-            interpolate_method,
-            return_char_alignments,
-        )
+            # Log GPU memory
+            if torch.cuda.is_available():
+                self.logger.debug(
+                    f"GPU memory - used: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
+                    f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
+                )
 
-        # Load alignment model
-        align_model_loaded, align_metadata = load_align_model(
-            language_code=language_code, device=device, model_name=align_model
-        )
+            # Load or reuse model (reload if language or device changed)
+            if (
+                self.model is None
+                or self._model_language != language_code
+                or self._model_device != device
+            ):
+                self.logger.debug(
+                    "Loading align model - language_code: %s, device: %s",
+                    language_code,
+                    device,
+                )
 
-        # Perform alignment
-        result = align(
-            transcript,
-            align_model_loaded,
-            align_metadata,
-            audio,
-            device,
-            interpolate_method=interpolate_method,
-            return_char_alignments=return_char_alignments,
-        )
+                # Clean up previous model if any
+                if self.model is not None:
+                    del self.model
+                    del self.metadata
+                    self.model = None
+                    self.metadata = None
+                    gc.collect()
+                    torch.cuda.empty_cache()
 
-        # Log GPU memory before cleanup
-        if torch.cuda.is_available():
-            self.logger.debug(
-                f"GPU memory before cleanup: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
-                f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
+                self.model, self.metadata = load_align_model(
+                    language_code=language_code, device=device, model_name=align_model
+                )
+                self._model_language = language_code
+                self._model_device = device
+                self.logger.debug("Alignment model loaded successfully")
+            else:
+                self.logger.debug("Reusing cached alignment model")
+
+            # Perform alignment
+            result = align(
+                transcript,
+                self.model,
+                self.metadata,
+                audio,
+                device,
+                interpolate_method=interpolate_method,
+                return_char_alignments=return_char_alignments,
             )
 
-        # Clean up model
-        gc.collect()
-        torch.cuda.empty_cache()
-        del align_model_loaded
-        del align_metadata
-
-        # Log GPU memory after cleanup
-        if torch.cuda.is_available():
-            self.logger.debug(
-                f"GPU memory after cleanup: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
-                f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
-            )
-
-        self.logger.debug("Completed alignment")
-        return result  # type: ignore[no-any-return]
+            self.logger.debug("Completed alignment")
+            return result  # type: ignore[no-any-return]
 
     def load_model(
         self, language_code: str, device: str, model_name: str | None = None
@@ -125,6 +117,8 @@ class WhisperXAlignmentService:
         self.model, self.metadata = load_align_model(
             language_code=language_code, device=device, model_name=model_name
         )
+        self._model_language = language_code
+        self._model_device = device
 
     def unload_model(self) -> None:
         """Unload alignment model and free GPU memory."""
@@ -134,6 +128,8 @@ class WhisperXAlignmentService:
         if self.metadata:
             del self.metadata
             self.metadata = None
+        self._model_language = None
+        self._model_device = None
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.debug("Alignment model unloaded and GPU memory cleared")

@@ -17,7 +17,7 @@ services:
     ports:
       - "8072:8000"
     volumes:
-      - "~/.cache:/root/.cache"
+      - "/data/whisperx/cache:/root/.cache"
       - "./records.db:/app/records.db"
     tmpfs:
       - /tmp:size=512m,mode=1777,noexec,nosuid,nodev

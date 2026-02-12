@@ -278,18 +278,13 @@ def process_audio_common(
         None: The result is saved in the transcription requests dict.
     """
     # Import here to avoid circular dependency
-    from app.infrastructure.ml import (
-        WhisperXAlignmentService,
-        WhisperXDiarizationService,
-        WhisperXSpeakerAssignmentService,
-        WhisperXTranscriptionService,
-        Qwen3AlignmentService,
-    )
+    from app.core.container import Container
 
-    # Use provided services or create default WhisperX implementations
-    transcription_svc = transcription_service or WhisperXTranscriptionService()
-    # alignment_svc = alignment_service or WhisperXAlignmentService()
-    alignment_svc = alignment_service or Qwen3AlignmentService()
+    # Use provided services or fall back to DI container singletons
+    # This ensures models are cached and reused across requests
+    _container = Container()
+    transcription_svc = transcription_service or _container.transcription_service()
+    alignment_svc = alignment_service or _container.qwen_alignment_service()
 
     # Create repository for this background task
     session = SessionLocal()
@@ -354,10 +349,8 @@ def process_audio_common(
         if channel_name is not None:
             result = transcript_dict
         else:
-            diarization_svc = diarization_service or WhisperXDiarizationService(
-                hf_token=Config.HF_TOKEN or ""
-            )
-            speaker_svc = speaker_service or WhisperXSpeakerAssignmentService()
+            diarization_svc = diarization_service or _container.diarization_service()
+            speaker_svc = speaker_service or _container.speaker_assignment_service()
             logger.debug(
                 "Diarization parameters - device: %s, min_speakers: %s, max_speakers: %s",
                 params.whisper_model_params.device.value,

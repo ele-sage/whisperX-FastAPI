@@ -294,8 +294,7 @@ def _check_and_complete_parent_task(
     failed_tasks = [t for t in child_tasks if t.status == TaskStatus.failed]
 
     if failed_tasks:
-        # Use 'channel' (e.g. 'left') or 'uuid' to identify the failed task
-        error_msg = "; ".join(f"Channel {t.channel}: {t.error}" for t in failed_tasks if t.error)
+        error_msg = "; ".join(f"{t.channel}: {t.error}" for t in failed_tasks if t.error)
         update_data = {
             "status": TaskStatus.failed,
             "error": error_msg,

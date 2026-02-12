@@ -9,6 +9,7 @@ import torch
 from qwen_asr import Qwen3ForcedAligner
 from whisperx.audio import SAMPLE_RATE
 
+from app.core.gpu import gpu_lock
 from app.core.logging import logger
 
 BATCH_SIZE = 16
@@ -46,6 +47,23 @@ class Qwen3AlignmentService:
         """
         self.logger.debug(f"Starting alignment for {language_code} on {device}")
 
+        with gpu_lock("alignment"):
+            return self._align_inner(
+                transcript, audio, language_code, device,
+                align_model, interpolate_method, return_char_alignments,
+            )
+
+    def _align_inner(
+        self,
+        transcript: list[dict[str, Any]],
+        audio: np.ndarray,
+        language_code: str,
+        device: str,
+        align_model: str | None,
+        interpolate_method: str,
+        return_char_alignments: bool,
+    ) -> dict[str, Any]:
+        """Inner alignment logic, called while holding the GPU semaphore."""
         if self.model is None:
             self.load_model(language_code, device)
 

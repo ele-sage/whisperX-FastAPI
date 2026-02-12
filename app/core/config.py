@@ -31,11 +31,11 @@ class WhisperSettings(BaseSettings):
         description="HuggingFace API token for model downloads",
     )
     WHISPER_MODEL: WhisperModel = Field(
-        default=WhisperModel.large_v3_turbo,
+        default=WhisperModel.tiny,
         description="Whisper model size to use",
     )
     DEFAULT_LANG: str = Field(
-        default="fr",
+        default="en",
         description="Default language for transcription",
     )
     DEVICE: Device = Field(
