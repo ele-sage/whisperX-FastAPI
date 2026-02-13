@@ -128,7 +128,7 @@ class TaskMapper:
         )
 
     @staticmethod
-    def to_response(entity: Task) -> TaskResponse:
+    def to_result(entity: Task) -> TaskResponse:
         """Convert domain entity to API response DTO."""
         return TaskResponse(
             identifier=entity.uuid,
@@ -321,7 +321,7 @@ When implementing model separation for a new entity:
 
 - [ ] Create API mapper in `app/api/mappers/`
   - [ ] Implement `to_domain()` function
-  - [ ] Implement `to_response()` function
+  - [ ] Implement `to_result()` function
   - [ ] Implement `to_summary()` function
 
 - [ ] Create database mapper in `app/infrastructure/database/mappers/`

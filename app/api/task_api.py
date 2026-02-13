@@ -1,10 +1,11 @@
 """This module contains the task management routes for the FastAPI application."""
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import get_task_management_service
 from app.api.mappers.task_mapper import TaskMapper
-from app.api.schemas.task_schemas import TaskListResponse
+from app.api.schemas.task_schemas import TaskListResponse, TaskBatchResponse
 from app.core.exceptions import TaskNotFoundError
 from app.core.logging import logger
 from app.schemas import Metadata, Response, Result
@@ -34,6 +35,25 @@ async def get_all_tasks_status(
 
     return TaskListResponse(tasks=task_summaries)
 
+@task_router.get("/task/batch", tags=["Tasks Management"])
+async def get_batch_tasks_status(
+        identifiers: List[str] = Query(
+            ...,
+            alias="id",
+            description="List of task identifiers (max 50)",
+            max_length=50
+        ),
+        service: TaskManagementService = Depends(get_task_management_service),
+) -> TaskBatchResponse:
+    """
+    Retrieve the detailed status of multiple tasks by their identifiers.
+    """
+    tasks = service.get_tasks_by_ids(identifiers)
+
+    results = [TaskMapper.to_result(task) for task in tasks]
+
+    return TaskBatchResponse(tasks=results)
+
 
 @task_router.get("/task/{identifier}", tags=["Tasks Management"])
 async def get_transcription_status(
@@ -61,25 +81,8 @@ async def get_transcription_status(
         raise TaskNotFoundError(identifier)
 
     logger.info("Status retrieved for task ID: %s", identifier)
-    return Result(
-        status=task.status,
-        result=task.result,
-        metadata=Metadata(
-            identifier=task.uuid,
-            task_type=task.task_type,
-            task_params=task.task_params,
-            language=task.language,
-            file_name=task.file_name,
-            url=task.url,
-            callback_url=task.callback_url,
-            duration=task.duration,
-            audio_duration=task.audio_duration,
-            start_time=task.start_time,
-            end_time=task.end_time,
-        ),
-        error=task.error,
-    )
 
+    return TaskMapper.to_result(task)
 
 @task_router.delete("/task/{identifier}/delete", tags=["Tasks Management"])
 async def delete_task(

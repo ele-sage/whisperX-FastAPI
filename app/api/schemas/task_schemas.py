@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.constants import AUDIO_LANGUAGE_DESCRIPTION
+from app.schemas import Result
 
 
 class CreateTaskRequest(BaseModel):
@@ -81,3 +82,11 @@ class TaskListResponse(BaseModel):
     """DTO for returning a list of task summaries."""
 
     tasks: list[TaskSummaryResponse] = Field(..., description="List of task summaries")
+
+
+class TaskBatchResponse(BaseModel):
+    """DTO for returning a batch of detailed task results.
+
+    Used for GET /task/batch to return full details for multiple tasks.
+    """
+    tasks: list[Result] = Field(..., description="List of detailed task results")

@@ -60,7 +60,7 @@ class TestTaskMapper:
         assert domain_task.status == "processing"
         assert domain_task.task_type == "diarization"
 
-    def test_to_response(self) -> None:
+    def test_to_result(self) -> None:
         """Test converting domain Task entity to TaskResponse DTO."""
         now = datetime.now(timezone.utc)
         domain_task = Task(
@@ -81,7 +81,7 @@ class TestTaskMapper:
             updated_at=now,
         )
 
-        response = TaskMapper.to_response(domain_task)
+        response = TaskMapper.to_result(domain_task)
 
         assert isinstance(response, TaskResponse)
         assert response.identifier == "task-456"
@@ -151,16 +151,16 @@ class TestTaskMapper:
         domain_task = TaskMapper.to_domain(original_dto, uuid="round-trip-test")
 
         # Convert back to response DTO
-        response_dto = TaskMapper.to_response(domain_task)
+        response_dto = TaskMapper.to_result(domain_task)
 
         # Verify key fields match
-        assert response_dto.identifier == "round-trip-test"
-        assert response_dto.task_type == original_dto.task_type
-        assert response_dto.file_name == original_dto.file_name
-        assert response_dto.url == original_dto.url
-        assert response_dto.audio_duration == original_dto.audio_duration
-        assert response_dto.language == original_dto.language
-        assert response_dto.task_params == original_dto.task_params
+        assert response_dto.metadata.identifier == "round-trip-test"
+        assert response_dto.metadata.task_type == original_dto.task_type
+        assert response_dto.metadata.file_name == original_dto.file_name
+        assert response_dto.metadata.url == original_dto.url
+        assert response_dto.metadata.audio_duration == original_dto.audio_duration
+        assert response_dto.metadata.language == original_dto.language
+        assert response_dto.metadata.task_params == original_dto.task_params
 
     def test_to_summary_excludes_result(self) -> None:
         """Test that TaskSummaryResponse doesn't include result data."""

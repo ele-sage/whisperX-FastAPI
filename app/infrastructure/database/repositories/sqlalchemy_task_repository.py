@@ -95,6 +95,34 @@ class SQLAlchemyTaskRepository:
             logger.error(f"Failed to get task by ID {identifier}: {str(e)}")
             return None
 
+    def get_by_ids(self, identifiers: list[str]) -> list[DomainTask]:
+        """
+        Retrieve multiple tasks by their UUIDs.
+
+        Args:
+            identifiers: List of UUIDs to retrieve
+
+        Returns:
+            list[DomainTask]: List of found Task entities
+        """
+        try:
+            # Use the SQL 'IN' clause for efficient batch retrieval
+            orm_tasks = (
+                self.session.query(ORMTask)
+                .filter(ORMTask.uuid.in_(identifiers))
+                .all()
+            )
+
+            # Convert ORM models to Domain entities
+            domain_tasks = [to_domain(orm_task) for orm_task in orm_tasks]
+
+            logger.debug(f"Retrieved {len(domain_tasks)} tasks from batch request of {len(identifiers)}")
+            return domain_tasks
+
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get batch tasks: {str(e)}")
+            return []
+
     def get_all(self) -> list[DomainTask]:
         """
         Get all tasks from the database.

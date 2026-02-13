@@ -14,8 +14,8 @@ from app.core.logging import logger
 # Per-stage semaphores — each allows one concurrent user of that model type.
 # Different stages CAN run in parallel (e.g. transcription + alignment),
 # but two transcriptions cannot run at the same time.
-_transcription_lock = threading.Semaphore(4)
-_alignment_lock = threading.Semaphore(4)
+_transcription_lock = threading.Semaphore(2)
+_alignment_lock = threading.Semaphore(2)
 _diarization_lock = threading.Semaphore(1)
 
 
