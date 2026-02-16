@@ -9,15 +9,15 @@ import threading
 from contextlib import contextmanager
 from typing import Generator
 
+from app.core import get_settings
 from app.core.logging import logger
 
 # Per-stage semaphores — each allows one concurrent user of that model type.
 # Different stages CAN run in parallel (e.g. transcription + alignment),
 # but two transcriptions cannot run at the same time.
-_transcription_lock = threading.Semaphore(2)
-_alignment_lock = threading.Semaphore(2)
-_diarization_lock = threading.Semaphore(1)
-
+_transcription_lock = threading.Semaphore(get_settings().whisper.TRANSCRIPTION_SEMAPHORE_LIMIT)
+_alignment_lock = threading.Semaphore(get_settings().whisper.ALIGNEMENT_SEMAPHORE_LIMIT)
+_diarization_lock = threading.Semaphore(get_settings().whisper.DIARIZATION_SEMAPHORE_LIMIT)
 
 @contextmanager
 def gpu_lock(stage: str) -> Generator[None, None, None]:
@@ -53,3 +53,5 @@ def _get_semaphore(stage: str) -> threading.Semaphore:
         return _diarization_lock
     else:
         raise ValueError(f"Unknown GPU stage: {stage!r}")
+
+

@@ -288,7 +288,7 @@ def process_audio_common(
     # Use provided services or fall back to DI container singletons
     # This ensures models are cached and reused across requests
     transcription_svc = transcription_service or _container.transcription_service()
-    alignment_svc = alignment_service or _container.qwen_alignment_service()
+    alignment_svc = alignment_service or _container.alignment_service()
 
     # Create repository for this background task
     session = SessionLocal()

@@ -50,6 +50,18 @@ class WhisperSettings(BaseSettings):
         ),
         description="Compute type for model inference",
     )
+    TRANSCRIPTION_SEMAPHORE_LIMIT: int = Field(
+        default=1,
+        description="Maximum number of concurrent transcriptions allowed on GPU",
+    )
+    ALIGNEMENT_SEMAPHORE_LIMIT: int = Field(
+        default=1,
+        description="Maximum number of concurrent alignments allowed on GPU",
+    )
+    DIARIZATION_SEMAPHORE_LIMIT: int = Field(
+        default=1,
+        description="Maximum number of concurrent diarizations allowed on GPU",
+    )
 
     AUDIO_EXTENSIONS: set[str] = {
         ".mp3",

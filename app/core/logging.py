@@ -6,6 +6,8 @@ import os
 
 import yaml
 
+from app.core import get_settings
+
 # Determine environment and set log level accordingly
 # Read directly from environment to avoid circular import with config module
 env = os.getenv("ENVIRONMENT", "production").lower()
@@ -40,4 +42,12 @@ logger.setLevel(log_level)
 # Log environment variables
 logger.info(f"Environment: {env}")
 logger.info(f"Log level: {log_level}")
+settings = get_settings()
+
+logger.info("GPU Semaphore Limits Initialized: ")
+logger.info(f"  Transcription={settings.whisper.TRANSCRIPTION_SEMAPHORE_LIMIT}")
+logger.info(f"  Alignment={settings.whisper.ALIGNEMENT_SEMAPHORE_LIMIT}")
+logger.info(f"  Diarization={settings.whisper.DIARIZATION_SEMAPHORE_LIMIT}")
+
+
 logger.debug(f"Debug messages enabled: {debug}")
