@@ -1,7 +1,6 @@
 """This module provides services for transcribing, diarizing, and aligning audio using Whisper and other models."""
 
 import gc
-import json
 from datetime import datetime
 from typing import Any
 

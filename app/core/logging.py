@@ -46,7 +46,7 @@ settings = get_settings()
 
 logger.info("GPU Semaphore Limits Initialized: ")
 logger.info(f"  Transcription={settings.whisper.TRANSCRIPTION_SEMAPHORE_LIMIT}")
-logger.info(f"  Alignment={settings.whisper.ALIGNEMENT_SEMAPHORE_LIMIT}")
+logger.info(f"  Alignment={settings.whisper.ALIGNMENT_SEMAPHORE_LIMIT}")
 logger.info(f"  Diarization={settings.whisper.DIARIZATION_SEMAPHORE_LIMIT}")
 
 
