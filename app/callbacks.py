@@ -10,6 +10,7 @@ from pydantic import HttpUrl
 
 from app.core.config import get_settings
 from app.core.logging import logger
+from app.schemas import Metadata, Result
 
 
 def validate_callback_url(callback_url: str) -> bool:
@@ -152,3 +153,43 @@ def post_task_callback(callback_url: str, payload: dict[str, Any]) -> None:
         callback_url,
         max_retries,
     )
+
+
+def send_task_result_callback(task: Any) -> None:
+    """
+    Construct the result payload and send the callback for a completed/failed task.
+
+    Args:
+        task: The task object (DomainTask) containing status, result, error, etc.
+    """
+    if not task.callback_url:
+        return
+
+    try:
+        metadata = Metadata(
+            identifier=task.uuid,
+            task_type=task.task_type,
+            task_params=task.task_params,
+            language=task.language,
+            file_name=task.file_name,
+            url=task.url,
+            callback_url=task.callback_url,
+            duration=task.duration,
+            audio_duration=task.audio_duration,
+            start_time=task.start_time,
+            end_time=task.end_time,
+        )
+        result_payload = Result(
+            status=task.status,
+            result=task.result,
+            metadata=metadata,
+            error=task.error,
+        )
+        post_task_callback(task.callback_url, result_payload.model_dump())
+        
+    except Exception as e:
+        logger.error(
+            "Failed to prepare/send callback for task %s: %s",
+            task.uuid,
+            str(e),
+        )

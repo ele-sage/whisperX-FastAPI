@@ -44,6 +44,18 @@ class ITaskRepository(Protocol):
         """
         ...
 
+    def get_by_ids(self, identifiers: list[str]) -> list[Task]:
+        """
+        Retrieve multiple tasks by their UUIDs.
+
+        Args:
+            identifiers: List of UUIDs to retrieve
+
+        Returns:
+            list[Task]: List of found Task entities
+        """
+        ...
+
     def get_all(self) -> list[Task]:
         """
         Get all tasks from the repository.

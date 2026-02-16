@@ -10,10 +10,12 @@ from app.infrastructure.ml.whisperx_alignment_service import WhisperXAlignmentSe
 from app.infrastructure.ml.whisperx_speaker_assignment_service import (
     WhisperXSpeakerAssignmentService,
 )
+from app.infrastructure.ml.qwen_alignment_service import Qwen3AlignmentService
 
 __all__ = [
     "WhisperXTranscriptionService",
     "WhisperXDiarizationService",
     "WhisperXAlignmentService",
     "WhisperXSpeakerAssignmentService",
+    "Qwen3AlignmentService",
 ]

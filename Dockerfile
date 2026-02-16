@@ -24,21 +24,37 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy project files
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_TOOL_BIN_DIR=/usr/local/bin
+
+# Copy project definition files
 COPY pyproject.toml .
 COPY uv.lock .
+
+# Install Python dependencies using UV (caching layer)
+# This layer will be cached unless pyproject.toml or uv.lock changes
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-dev --no-install-project \
+    && uv pip install --system ctranslate2==4.6.0 \
+    && rm -rf /tmp/* /root/.uv /var/cache/*
+
+# Copy project files
 COPY app app/
 COPY tests tests/
 COPY app/gunicorn_logging.conf .
 
-# Install Python dependencies using UV with pyproject.toml
+# Install the project itself and specific system packages
 # UV automatically selects CUDA 12.8 wheels on Linux
-RUN uv sync --frozen --no-dev \
-    && uv pip install --system ctranslate2==4.6.0 \
-    && rm -rf /root/.cache /tmp/* /root/.uv /var/cache/* \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev \
     && find /usr/local -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local -type f -name '*.pyc' -delete \
     && find /usr/local -type f -name '*.pyo' -delete
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 

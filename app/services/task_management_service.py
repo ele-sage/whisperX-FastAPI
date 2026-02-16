@@ -58,6 +58,15 @@ class TaskManagementService:
 
         return task
 
+    def get_tasks_by_ids(self, identifiers: list[str]) -> list[Task]:
+        """
+        Retrieve specific tasks by a list of identifiers.
+        """
+        tasks = self.repository.get_by_ids(identifiers)
+
+        logger.info("Batch retrieved %d tasks out of %d requested", len(tasks), len(identifiers))
+        return tasks
+
     def get_all_tasks(self) -> list[Task]:
         """
         Retrieve all tasks from the repository.

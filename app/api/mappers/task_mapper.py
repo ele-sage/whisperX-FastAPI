@@ -13,6 +13,7 @@ from app.api.schemas.task_schemas import (
     TaskSummaryResponse,
 )
 from app.domain.entities.task import Task
+from app.schemas import Result, Metadata
 
 
 class TaskMapper:
@@ -43,31 +44,29 @@ class TaskMapper:
         )
 
     @staticmethod
-    def to_response(entity: Task) -> TaskResponse:
-        """Convert domain Task entity to API TaskResponse DTO.
+    def to_result(entity: Task) -> Result:
+        """Convert domain Task entity to the detailed Result schema.
 
-        Args:
-            entity: The domain Task entity
-
-        Returns:
-            TaskResponse: The API response DTO
+        This matches the output structure of the /task/{identifier} endpoint,
+        grouping details into a metadata object.
         """
-        return TaskResponse(
-            identifier=entity.uuid,
+        return Result(
             status=entity.status,
-            task_type=entity.task_type,
-            file_name=entity.file_name,
-            url=entity.url,
-            audio_duration=entity.audio_duration,
-            language=entity.language,
-            task_params=entity.task_params,
             result=entity.result,
             error=entity.error,
-            duration=entity.duration,
-            start_time=entity.start_time,
-            end_time=entity.end_time,
-            created_at=entity.created_at,
-            updated_at=entity.updated_at,
+            metadata=Metadata(
+                identifier=entity.uuid,
+                task_type=entity.task_type,
+                task_params=entity.task_params,
+                language=entity.language,
+                file_name=entity.file_name,
+                url=entity.url,
+                callback_url=entity.callback_url,
+                duration=entity.duration,
+                audio_duration=entity.audio_duration,
+                start_time=entity.start_time,
+                end_time=entity.end_time,
+            ),
         )
 
     @staticmethod

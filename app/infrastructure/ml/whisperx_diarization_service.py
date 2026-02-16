@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 from whisperx.diarize import DiarizationPipeline
 
+from app.core.gpu import gpu_lock
 from app.core.logging import logger
 
 
@@ -15,8 +16,8 @@ class WhisperXDiarizationService:
     """
     WhisperX/PyAnnote-based implementation of diarization service.
 
-    This service wraps the WhisperX diarization pipeline (PyAnnote) to provide
-    speaker diarization functionality following the IDiarizationService interface.
+    The diarization model is lazily loaded on first call and cached for reuse.
+    GPU access is serialized via a semaphore so concurrent requests queue safely.
     """
 
     def __init__(self, hf_token: str) -> None:
@@ -28,6 +29,7 @@ class WhisperXDiarizationService:
         """
         self.hf_token = hf_token
         self.model: Any = None
+        self._model_device: str | None = None
         self.logger = logger
 
     def diarize(
@@ -40,53 +42,45 @@ class WhisperXDiarizationService:
         """
         Identify speakers using PyAnnote diarization model.
 
-        Args:
-            audio: Audio data as numpy array (float32)
-            device: Device to use ('cpu' or 'cuda')
-            min_speakers: Minimum number of speakers (optional)
-            max_speakers: Maximum number of speakers (optional)
-
-        Returns:
-            DataFrame with speaker segments
+        The model is loaded once and reused across calls.
+        GPU access is serialized.
         """
-        self.logger.debug("Starting diarization with device: %s", device)
+        with gpu_lock("diarization"):
+            self.logger.debug("Starting diarization with device: %s", device)
 
-        # Log GPU memory before loading model
-        if torch.cuda.is_available():
-            self.logger.debug(
-                f"GPU memory before loading model - used: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
-                f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
+            # Log GPU memory
+            if torch.cuda.is_available():
+                self.logger.debug(
+                    f"GPU memory - used: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
+                    f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
+                )
+
+            # Load or reuse model
+            if self.model is None or self._model_device != device:
+                self.logger.debug("Loading diarization model on %s", device)
+
+                # Clean up previous model if device changed
+                if self.model is not None:
+                    del self.model
+                    self.model = None
+                    gc.collect()
+                    torch.cuda.empty_cache()
+
+                self.model = DiarizationPipeline(
+                    use_auth_token=self.hf_token, device=device
+                )
+                self._model_device = device
+                self.logger.debug("Diarization model loaded successfully")
+            else:
+                self.logger.debug("Reusing cached diarization model")
+
+            # Perform diarization
+            result = self.model(
+                audio=audio, min_speakers=min_speakers, max_speakers=max_speakers
             )
 
-        # Load model
-        model = DiarizationPipeline(use_auth_token=self.hf_token, device=device)
-
-        # Perform diarization
-        result = model(
-            audio=audio, min_speakers=min_speakers, max_speakers=max_speakers
-        )
-
-        # Log GPU memory before cleanup
-        if torch.cuda.is_available():
-            self.logger.debug(
-                f"GPU memory before cleanup: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
-                f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
-            )
-
-        # Clean up model
-        gc.collect()
-        torch.cuda.empty_cache()
-        del model
-
-        # Log GPU memory after cleanup
-        if torch.cuda.is_available():
-            self.logger.debug(
-                f"GPU memory after cleanup: {torch.cuda.memory_allocated() / 1024**2:.2f} MB, "
-                f"available: {torch.cuda.get_device_properties(0).total_memory / 1024**2:.2f} MB"
-            )
-
-        self.logger.debug("Completed diarization with device: %s", device)
-        return result  # type: ignore[no-any-return]
+            self.logger.debug("Completed diarization with device: %s", device)
+            return result  # type: ignore[no-any-return]
 
     def load_model(self, device: str, hf_token: str) -> None:
         """
@@ -99,12 +93,14 @@ class WhisperXDiarizationService:
         self.logger.info(f"Loading diarization model on {device}")
         self.hf_token = hf_token
         self.model = DiarizationPipeline(use_auth_token=self.hf_token, device=device)
+        self._model_device = device
 
     def unload_model(self) -> None:
         """Unload diarization model and free GPU memory."""
         if self.model:
             del self.model
             self.model = None
+            self._model_device = None
             gc.collect()
             torch.cuda.empty_cache()
             self.logger.debug("Diarization model unloaded and GPU memory cleared")

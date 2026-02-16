@@ -95,6 +95,34 @@ class SQLAlchemyTaskRepository:
             logger.error(f"Failed to get task by ID {identifier}: {str(e)}")
             return None
 
+    def get_by_ids(self, identifiers: list[str]) -> list[DomainTask]:
+        """
+        Retrieve multiple tasks by their UUIDs.
+
+        Args:
+            identifiers: List of UUIDs to retrieve
+
+        Returns:
+            list[DomainTask]: List of found Task entities
+        """
+        try:
+            # Use the SQL 'IN' clause for efficient batch retrieval
+            orm_tasks = (
+                self.session.query(ORMTask)
+                .filter(ORMTask.uuid.in_(identifiers))
+                .all()
+            )
+
+            # Convert ORM models to Domain entities
+            domain_tasks = [to_domain(orm_task) for orm_task in orm_tasks]
+
+            logger.debug(f"Retrieved {len(domain_tasks)} tasks from batch request of {len(identifiers)}")
+            return domain_tasks
+
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get batch tasks: {str(e)}")
+            return []
+
     def get_all(self) -> list[DomainTask]:
         """
         Get all tasks from the database.
@@ -181,3 +209,32 @@ class SQLAlchemyTaskRepository:
             self.session.rollback()
             logger.error(f"Failed to delete task {identifier}: {str(e)}")
             return False
+
+    def get_by_parent_id(self, parent_task_id: str) -> list[DomainTask]:
+        """
+        Get all child tasks by parent task UUID.
+
+        Args:
+            parent_task_id: The UUID of the parent task
+
+        Returns:
+            list[DomainTask]: List of child Task entities
+        """
+        try:
+            orm_tasks = (
+                self.session.query(ORMTask)
+                .filter(ORMTask.parent_task_id == parent_task_id)
+                .all()
+            )
+            domain_tasks = [to_domain(orm_task) for orm_task in orm_tasks]
+
+            logger.debug(
+                f"Retrieved {len(domain_tasks)} child tasks for parent: {parent_task_id}"
+            )
+            return domain_tasks
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Failed to get child tasks for parent {parent_task_id}: {str(e)}"
+            )
+            return []

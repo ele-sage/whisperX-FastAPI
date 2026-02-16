@@ -14,11 +14,12 @@ services:
     container_name: whisperx-container
     env_file:
       - .env
+    environment:
+      - DB_URL=sqlite:////data/records.db
     ports:
-      - "8000:8000"
+      - "8072:8000"
     volumes:
       - "/data/whisperx/cache:/root/.cache"
-      - "/data/whisperx/tmp:/tmp"
-volumes:
-  whisperx-models-cache:
-  whisperx-app-volume:
+      - "/data/whisperx:/data"
+    tmpfs:
+      - /tmp:size=512m,mode=1777,noexec,nosuid,nodev

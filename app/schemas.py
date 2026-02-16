@@ -20,6 +20,7 @@ class Response(BaseModel):
 class Metadata(BaseModel):
     """Metadata model for task information."""
 
+    identifier: str
     task_type: str
     task_params: dict[str, Any] | None
     language: str | None
@@ -47,6 +48,8 @@ class TaskSimple(BaseModel):
     audio_duration: float | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
+    parent_task_id: str | None = None
+    channel: str | None = None
 
     @classmethod
     def from_domain(cls, task: object) -> "TaskSimple":
@@ -54,7 +57,7 @@ class TaskSimple(BaseModel):
 
         The domain Task is expected to have attributes matching the fields
         used here (uuid, status, task_type, language, file_name, error, url,
-        duration, audio_duration, start_time, end_time).
+        duration, audio_duration, start_time, end_time, parent_task_id, channel).
         """
         return cls(
             identifier=getattr(task, "uuid", ""),
@@ -69,6 +72,8 @@ class TaskSimple(BaseModel):
             audio_duration=getattr(task, "audio_duration", None),
             start_time=getattr(task, "start_time", None),
             end_time=getattr(task, "end_time", None),
+            parent_task_id=getattr(task, "parent_task_id", None),
+            channel=getattr(task, "channel", None),
         )
 
 
@@ -109,6 +114,10 @@ class Word(BaseModel):
     end: float | None = None
     score: float | None = None
 
+class LabeledWord(Word):
+    """Model for a word with optional timing and score information."""
+
+    speaker: str | None = None
 
 class AlignmentSegment(BaseModel):
     """Model for a segment with word alignments."""
@@ -118,12 +127,17 @@ class AlignmentSegment(BaseModel):
     text: str
     words: list[Word]
 
+class LabeledSegment(AlignmentSegment):
+    """Model for a labeled segment of transcription."""
+
+    speaker: str | None = None
+    words: list[LabeledWord]
 
 class AlignedTranscription(BaseModel):
     """Model for aligned transcription with segments and word segments."""
 
-    segments: list[AlignmentSegment]
-    word_segments: list[Word]
+    segments: list[LabeledSegment]
+    word_segments: list[LabeledWord]
 
 
 class DiarizationSegment(BaseModel):
@@ -391,6 +405,16 @@ class DiarizationParams(BaseModel):
     )
 
 
+class ProcessingConfig(BaseModel):
+    """Configuration bundle for speech processing parameters."""
+    
+    model_params: WhisperModelParams
+    align_params: AlignmentParams
+    diarize_params: DiarizationParams
+    asr_options: ASROptions
+    vad_options: VADOptions
+
+
 class SpeechToTextProcessingParams(BaseModel):
     """Model for speech-to-text processing parameters."""
 
@@ -414,6 +438,8 @@ class TaskType(str, Enum):
     diarization = "diarization"
     combine_transcript_diarization = "combine_transcript&diarization"
     full_process = "full_process"
+    split_audio_parent = "split_audio_parent"
+    split_audio_channel = "split_audio_channel"
 
 
 class TaskStatus(str, Enum):

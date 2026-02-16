@@ -12,6 +12,7 @@ from app.infrastructure.ml import (
     WhisperXDiarizationService,
     WhisperXSpeakerAssignmentService,
     WhisperXTranscriptionService,
+    Qwen3AlignmentService,
 )
 from app.services.file_service import FileService
 from app.services.task_management_service import TaskManagementService
@@ -80,6 +81,10 @@ class Container(containers.DeclarativeContainer):
 
     alignment_service = providers.Singleton(
         WhisperXAlignmentService,
+    )
+
+    qwen_alignment_service = providers.Singleton(
+        Qwen3AlignmentService,
     )
 
     speaker_assignment_service = providers.Singleton(

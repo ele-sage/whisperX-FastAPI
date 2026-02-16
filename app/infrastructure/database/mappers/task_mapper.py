@@ -29,6 +29,8 @@ def to_domain(orm_task: ORMTask) -> DomainTask:
         start_time=orm_task.start_time,
         end_time=orm_task.end_time,
         error=orm_task.error,
+        parent_task_id=orm_task.parent_task_id,
+        channel=orm_task.channel,
         created_at=orm_task.created_at,
         updated_at=orm_task.updated_at,
     )
@@ -59,6 +61,8 @@ def to_orm(domain_task: DomainTask) -> ORMTask:
         start_time=domain_task.start_time,
         end_time=domain_task.end_time,
         error=domain_task.error,
+        parent_task_id=domain_task.parent_task_id,
+        channel=domain_task.channel,
         created_at=domain_task.created_at,
         updated_at=domain_task.updated_at,
     )

@@ -1,6 +1,7 @@
 """This module provides services for transcribing, diarizing, and aligning audio using Whisper and other models."""
 
 import gc
+import json
 from datetime import datetime
 from typing import Any
 
@@ -14,7 +15,7 @@ from whisperx import (
 )
 from whisperx.diarize import DiarizationPipeline
 
-from app.callbacks import post_task_callback
+from app.callbacks import send_task_result_callback
 from app.core.config import Config
 from app.core.logging import logger
 from app.domain.repositories.task_repository import ITaskRepository
@@ -30,8 +31,6 @@ from app.schemas import (
     AlignedTranscription,
     ComputeType,
     Device,
-    Metadata,
-    Result,
     SpeechToTextProcessingParams,
     TaskStatus,
     WhisperModel,
@@ -262,6 +261,7 @@ def process_audio_common(
     alignment_service: IAlignmentService | None = None,
     diarization_service: IDiarizationService | None = None,
     speaker_service: ISpeakerAssignmentService | None = None,
+    channel_name: str | None = None
 ) -> None:
     """
     Process an audio clip to generate a transcript with speaker labels.
@@ -272,25 +272,23 @@ def process_audio_common(
         alignment_service: Alignment service (defaults to WhisperX if None)
         diarization_service: Diarization service (defaults to WhisperX if None)
         speaker_service: Speaker assignment service (defaults to WhisperX if None)
+        channel_name:
 
     Returns:
         None: The result is saved in the transcription requests dict.
     """
-    # Import here to avoid circular dependency
-    from app.infrastructure.ml import (
-        WhisperXAlignmentService,
-        WhisperXDiarizationService,
-        WhisperXSpeakerAssignmentService,
-        WhisperXTranscriptionService,
-    )
+    # Import the shared container from dependencies (set once at app startup).
+    # IMPORTANT: Do NOT create Container() here — that creates a new container
+    # with fresh singletons each time, leaking GPU memory.
+    from app.api.dependencies import _container
 
-    # Use provided services or create default WhisperX implementations
-    transcription_svc = transcription_service or WhisperXTranscriptionService()
-    alignment_svc = alignment_service or WhisperXAlignmentService()
-    diarization_svc = diarization_service or WhisperXDiarizationService(
-        hf_token=Config.HF_TOKEN or ""
-    )
-    speaker_svc = speaker_service or WhisperXSpeakerAssignmentService()
+    if _container is None:
+        raise RuntimeError("DI container not initialized. Was set_container() called at startup?")
+
+    # Use provided services or fall back to DI container singletons
+    # This ensures models are cached and reused across requests
+    transcription_svc = transcription_service or _container.transcription_service()
+    alignment_svc = alignment_service or _container.alignment_service()
 
     # Create repository for this background task
     session = SessionLocal()
@@ -349,26 +347,31 @@ def process_audio_common(
         )
         transcript = AlignedTranscription(**segments_transcript)
         # removing words within each segment that have missing start, end, or score values
-        filtered_transcript = filter_aligned_transcription(transcript)
+        filtered_transcript = filter_aligned_transcription(transcript, channel_name)
         transcript_dict = filtered_transcript.model_dump()
 
-        logger.debug(
-            "Diarization parameters - device: %s, min_speakers: %s, max_speakers: %s",
-            params.whisper_model_params.device.value,
-            params.diarization_params.min_speakers,
-            params.diarization_params.max_speakers,
-        )
-        diarization_segments = diarization_svc.diarize(
-            audio=params.audio,
-            device=params.whisper_model_params.device.value,
-            min_speakers=params.diarization_params.min_speakers,
-            max_speakers=params.diarization_params.max_speakers,
-        )
+        if channel_name is not None:
+            result = transcript_dict
+        else:
+            diarization_svc = diarization_service or _container.diarization_service()
+            speaker_svc = speaker_service or _container.speaker_assignment_service()
+            logger.debug(
+                "Diarization parameters - device: %s, min_speakers: %s, max_speakers: %s",
+                params.whisper_model_params.device.value,
+                params.diarization_params.min_speakers,
+                params.diarization_params.max_speakers,
+            )
+            diarization_segments = diarization_svc.diarize(
+                audio=params.audio,
+                device=params.whisper_model_params.device.value,
+                min_speakers=params.diarization_params.min_speakers,
+                max_speakers=params.diarization_params.max_speakers,
+            )
 
-        logger.debug("Starting to combine transcript with diarization results")
-        result = speaker_svc.assign_speakers(diarization_segments, transcript_dict)
+            logger.debug("Starting to combine transcript with diarization results")
+            result = speaker_svc.assign_speakers(diarization_segments, transcript_dict)
 
-        logger.debug("Completed combining transcript with diarization results")
+            logger.debug("Completed combining transcript with diarization results")
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -417,25 +420,7 @@ def process_audio_common(
             if params.callback_url:
                 task = repository.get_by_id(params.identifier)
                 if task:
-                    metadata = Metadata(
-                        task_type=task.task_type,
-                        task_params=task.task_params,
-                        language=task.language,
-                        file_name=task.file_name,
-                        url=task.url,
-                        callback_url=task.callback_url,
-                        duration=task.duration,
-                        audio_duration=task.audio_duration,
-                        start_time=task.start_time,
-                        end_time=task.end_time,
-                    )
-                    result_payload = Result(
-                        status=task.status,
-                        result=task.result,
-                        metadata=metadata,
-                        error=task.error,
-                    )
-                    post_task_callback(params.callback_url, result_payload.model_dump())
+                    send_task_result_callback(task)
         except Exception as e:
             logger.error(
                 "Failed to send callback for identifier %s: %s",

@@ -14,6 +14,19 @@ VIDEO_EXTENSIONS = Config.VIDEO_EXTENSIONS
 ALLOWED_EXTENSIONS = Config.ALLOWED_EXTENSIONS
 
 
+def safe_remove_file(file_path: str) -> None:
+    """Best-effort removal for temporary files."""
+    if not file_path:
+        return
+    try:
+        os.remove(file_path)
+        logger.debug("Removed temporary file: %s", file_path)
+    except FileNotFoundError:
+        logger.debug("Temporary file already removed: %s", file_path)
+    except OSError as exc:
+        logger.warning("Failed to remove temporary file %s: %s", file_path, exc)
+
+
 def validate_extension(filename: str, allowed_extensions: set[str]) -> str:
     """
     Check the file extension of the given file and compare it if its is in the allowed AUDIO and VIDEO.
