@@ -13,7 +13,7 @@ from app.core import get_settings
 from app.core.logging import logger
 
 _transcription_lock = threading.Semaphore(get_settings().whisper.TRANSCRIPTION_SEMAPHORE_LIMIT)
-_alignment_lock = threading.Semaphore(get_settings().whisper.ALIGNEMENT_SEMAPHORE_LIMIT)
+_alignment_lock = threading.Semaphore(get_settings().whisper.ALIGNMENT_SEMAPHORE_LIMIT)
 _diarization_lock = threading.Semaphore(get_settings().whisper.DIARIZATION_SEMAPHORE_LIMIT)
 
 @contextmanager

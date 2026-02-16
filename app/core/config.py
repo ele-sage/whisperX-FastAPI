@@ -54,7 +54,7 @@ class WhisperSettings(BaseSettings):
         default=1,
         description="Maximum number of concurrent transcriptions allowed on GPU",
     )
-    ALIGNEMENT_SEMAPHORE_LIMIT: int = Field(
+    ALIGNMENT_SEMAPHORE_LIMIT: int = Field(
         default=1,
         description="Maximum number of concurrent alignments allowed on GPU",
     )
