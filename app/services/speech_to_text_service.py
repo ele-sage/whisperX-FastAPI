@@ -90,7 +90,7 @@ def process_speech_to_text(
                 callback_url=callback_url,
             )
             task_id = repository.add(task)
-            logger.info("Split audio parent task added: ID %s", task_id)
+            logger.debug("Split audio parent task added: ID %s", task_id)
 
             return _process_split_audio(
                 parent_id=task_id,
@@ -113,7 +113,7 @@ def process_speech_to_text(
             callback_url=callback_url,
         )
         task_id = repository.add(task)
-        logger.info("Task added to database: ID %s", task_id)
+        logger.debug("Task added to database: ID %s", task_id)
 
         audio_params = SpeechToTextProcessingParams(
             audio=process_audio_file(temp_file),
@@ -126,7 +126,7 @@ def process_speech_to_text(
             callback_url=callback_url,
         )
         background_tasks.add_task(process_audio_common, audio_params)
-        logger.info("Background task scheduled: ID %s", task_id)
+        logger.debug("Background task scheduled: ID %s", task_id)
 
         return Response(identifier=task_id, message="Task queued")
     finally:
@@ -162,7 +162,7 @@ def _process_split_audio(
             channel=channel,
         )
         channel_id = repository.add(child_task)
-        logger.info(
+        logger.debug(
             "Created split audio child task: %s channel=%s for parent=%s",
             channel_id,
             channel,
@@ -183,7 +183,7 @@ def _process_split_audio(
         )
         background_tasks.add_task(_process_split_audio_channel, params, parent_id, channel)
 
-    logger.info(
+    logger.debug(
         "Background tasks scheduled for split audio processing: parent=%s",
         parent_id,
     )
@@ -321,7 +321,7 @@ def _check_and_complete_parent_task(
         }
 
     repository.update(identifier=parent_task_id, update_data=update_data)
-    logger.info(f"Parent task {parent_task_id} marked as {update_data['status']}")
+    logger.info(f"Parent task: {parent_task_id} | Status: {update_data['status']} | File: {parent_task.file_name} | Duration: {total_duration}s")
 
     if parent_task.callback_url:
         if task := repository.get_by_id(parent_task_id):

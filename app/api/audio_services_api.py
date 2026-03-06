@@ -100,7 +100,7 @@ async def transcribe(
     Returns:
         Response: Confirmation message of task queuing.
     """
-    logger.info("Received transcription request for file: %s", file.filename)
+    logger.debug("Received transcription request for file: %s", file.filename)
 
     # Validate and save file using file service
     if file.filename is None:
@@ -142,7 +142,7 @@ async def transcribe(
         transcription_service,
     )
 
-    logger.info(TASK_SCHEDULED_LOG_FORMAT, identifier)
+    logger.debug(TASK_SCHEDULED_LOG_FORMAT, identifier)
     return Response(identifier=identifier, message=TASK_QUEUED_MESSAGE)
 
 
@@ -184,7 +184,7 @@ def align(
     Returns:
         Response: Confirmation message of task queuing.
     """
-    logger.info(
+    logger.debug(
         "Received alignment request for file: %s and transcript: %s",
         file.filename,
         transcript.filename,
@@ -250,7 +250,7 @@ def align(
         alignment_service,
     )
 
-    logger.info(TASK_SCHEDULED_LOG_FORMAT, identifier)
+    logger.debug(TASK_SCHEDULED_LOG_FORMAT, identifier)
     return Response(identifier=identifier, message=TASK_QUEUED_MESSAGE)
 
 
@@ -284,7 +284,7 @@ async def diarize(
     Returns:
         Response: Confirmation message of task queuing.
     """
-    logger.info("Received diarization request for file: %s", file.filename)
+    logger.debug("Received diarization request for file: %s", file.filename)
 
     # Validate and save file using file service
     if file.filename is None:
@@ -323,7 +323,7 @@ async def diarize(
         diarization_service,
     )
 
-    logger.info(TASK_SCHEDULED_LOG_FORMAT, identifier)
+    logger.debug(TASK_SCHEDULED_LOG_FORMAT, identifier)
     return Response(identifier=identifier, message=TASK_QUEUED_MESSAGE)
 
 
@@ -356,7 +356,7 @@ async def combine(
     Returns:
         Response: Confirmation message of task queuing.
     """
-    logger.info(
+    logger.debug(
         "Received combine request for aligned transcript: %s and diarization result: %s",
         aligned_transcript.filename,
         diarization_result.filename,
@@ -419,5 +419,5 @@ async def combine(
         speaker_service,
     )
 
-    logger.info(TASK_SCHEDULED_LOG_FORMAT, identifier)
+    logger.debug(TASK_SCHEDULED_LOG_FORMAT, identifier)
     return Response(identifier=identifier, message=TASK_QUEUED_MESSAGE)

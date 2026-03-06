@@ -24,7 +24,7 @@ def safe_remove_file(file_path: str) -> None:
     except FileNotFoundError:
         logger.debug("Temporary file already removed: %s", file_path)
     except OSError as exc:
-        logger.warning("Failed to remove temporary file %s: %s", file_path, exc)
+        logger.error("Failed to remove temporary file %s: %s", file_path, exc)
 
 
 def validate_extension(filename: str, allowed_extensions: set[str]) -> str:
@@ -43,7 +43,7 @@ def validate_extension(filename: str, allowed_extensions: set[str]) -> str:
     """
     file_extension = os.path.splitext(filename)[1].lower()
     if file_extension not in allowed_extensions:
-        logger.info("Received file upload request: %s", filename)
+        logger.error("Received file upload request with unsupported extension: %s", filename)
         raise UnsupportedFileExtensionError(
             filename, file_extension, allowed_extensions
         )

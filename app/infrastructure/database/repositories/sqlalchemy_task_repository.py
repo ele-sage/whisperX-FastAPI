@@ -56,7 +56,7 @@ class SQLAlchemyTaskRepository:
             self.session.commit()
             self.session.refresh(orm_task)
 
-            logger.info(f"Task added successfully with UUID: {orm_task.uuid}")
+            logger.debug(f"Task added successfully with UUID: {orm_task.uuid}")
             return str(orm_task.uuid)
 
         except SQLAlchemyError as e:
@@ -169,7 +169,7 @@ class SQLAlchemyTaskRepository:
                     setattr(orm_task, key, value)
 
             self.session.commit()
-            logger.info(f"Task updated successfully with UUID: {identifier}")
+            logger.debug(f"Task updated successfully with UUID: {identifier}")
 
         except SQLAlchemyError as e:
             self.session.rollback()
@@ -199,7 +199,7 @@ class SQLAlchemyTaskRepository:
             if orm_task:
                 self.session.delete(orm_task)
                 self.session.commit()
-                logger.info(f"Task deleted successfully with UUID: {identifier}")
+                logger.debug(f"Task deleted successfully with UUID: {identifier}")
                 return True
             else:
                 logger.debug(f"Task not found for deletion with UUID: {identifier}")

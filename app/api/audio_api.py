@@ -78,7 +78,7 @@ async def speech_to_text(
     Returns:
         Response: Confirmation message of task queuing.
     """
-    logger.info("Received file upload request: %s", file.filename)
+    logger.debug("Received file upload request: %s", file.filename)
 
     if file.filename is None:
         raise FileValidationError(filename="unknown", reason="Filename is missing")
@@ -86,7 +86,7 @@ async def speech_to_text(
     file_service.validate_file_extension(file.filename, ALLOWED_EXTENSIONS)
 
     temp_file = file_service.save_upload(file)
-    logger.info("%s saved as temporary file: %s", file.filename, temp_file)
+    logger.debug("%s saved as temporary file: %s", file.filename, temp_file)
 
     return process_speech_to_text(
         temp_file=temp_file,
@@ -143,10 +143,10 @@ async def speech_to_text_url(
     Returns:
         Response: Confirmation message of task queuing.
     """
-    logger.info("Received URL for processing: %s", url)
+    logger.debug("Received URL for processing: %s", url)
 
     temp_audio_file, filename = file_service.download_from_url(url)
-    logger.info("File downloaded and saved temporarily: %s", temp_audio_file)
+    logger.debug("File downloaded and saved temporarily: %s", temp_audio_file)
 
     file_service.validate_file_extension(temp_audio_file, ALLOWED_EXTENSIONS)
 

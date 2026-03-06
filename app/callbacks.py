@@ -111,7 +111,7 @@ def post_task_callback(callback_url: str, payload: dict[str, Any]) -> None:
                 response = client.post(callback_url, json=serialized_payload)
                 response.raise_for_status()
 
-            logger.info(
+            logger.debug(
                 "Successfully posted callback to %s",
                 callback_url,
             )
