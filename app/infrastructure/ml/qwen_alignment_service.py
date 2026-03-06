@@ -244,7 +244,6 @@ class Qwen3AlignmentService:
 
     def unload_model(self) -> None:
         if self.model:
-            del self.model
             self.model = None
         gc.collect()
         torch.cuda.empty_cache()
