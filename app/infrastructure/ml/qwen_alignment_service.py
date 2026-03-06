@@ -23,7 +23,12 @@ class Qwen3AlignmentService:
     def __init__(self) -> None:
         """Initialize the alignment service."""
         self.model: Any = None
+        self._vram_usage_bytes: float = 0.0
         self.logger = logger
+
+    def get_vram_usage(self) -> float:
+        """Get the estimated VRAM usage by this specific model instance in MB."""
+        return self._vram_usage_bytes / (1024 * 1024)
 
         # Ensure NLTK data is available for sentence splitting
         try:
@@ -236,14 +241,24 @@ class Qwen3AlignmentService:
         self.logger.info(f"Loading Qwen3 model on {device}...")
         dtype = torch.bfloat16 if device == 'cuda' else torch.int8
         device_map = "cuda:0" if device == 'cuda' else "cpu"
+        vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+        
         self.model = Qwen3ForcedAligner.from_pretrained(
             "Qwen/Qwen3-ForcedAligner-0.6B",
             dtype=dtype,
             device_map=device_map,
         )
+        
+        vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+        self._vram_usage_bytes = max(0.0, vram_after - vram_before)
 
     def unload_model(self) -> None:
         if self.model:
+            try:
+                del self.model
+            except AttributeError:
+                pass
             self.model = None
+        self._vram_usage_bytes = 0.0
         gc.collect()
         torch.cuda.empty_cache()

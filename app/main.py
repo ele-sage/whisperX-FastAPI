@@ -211,3 +211,64 @@ async def readiness_check() -> JSONResponse:
                 "message": "Application is not ready due to an internal error.",
             },
         )
+
+
+@app.get("/health/vram", tags=["Health"], summary="VRAM usage check")
+async def vram_check() -> JSONResponse:
+    """Check GPU VRAM usage across all ML services.
+
+    Returns the total allocated and reserved VRAM, along with a breakdown
+    of exactly how much VRAM each ML service model is currently occupying.
+    """
+    import torch
+    from app.api.dependencies import _container
+    
+    if not torch.cuda.is_available():
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "ok",
+                "message": "CUDA is not available. VRAM tracking disabled."
+            }
+        )
+        
+    total_allocated_mb = torch.cuda.memory_allocated() / (1024 * 1024)
+    total_reserved_mb = torch.cuda.memory_reserved() / (1024 * 1024)
+    
+    # Safely get tracking from the singletons if they exist
+    transcription_vram = 0.0
+    alignment_vram = 0.0
+    diarization_vram = 0.0
+    qwen_alignment_vram = 0.0
+    
+    if _container:
+        if hasattr(_container.transcription_service, 'provided'):
+            # Evaluate the provider to get the singleton instance
+            ts = _container.transcription_service()
+            if hasattr(ts, 'get_vram_usage'):
+                transcription_vram = ts.get_vram_usage()
+                
+        if hasattr(_container.alignment_service, 'provided'):
+            als = _container.alignment_service()
+            if hasattr(als, 'get_vram_usage'):
+                alignment_vram = als.get_vram_usage()
+                
+        if hasattr(_container.diarization_service, 'provided'):
+            ds = _container.diarization_service()
+            if hasattr(ds, 'get_vram_usage'):
+                diarization_vram = ds.get_vram_usage()
+                
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": "ok",
+            "total_allocated_mb": round(total_allocated_mb, 2),
+            "total_reserved_mb": round(total_reserved_mb, 2),
+            "services": {
+                "transcription_vram_mb": round(transcription_vram, 2),
+                "alignment_vram_mb": round(alignment_vram, 2),
+                "diarization_vram_mb": round(diarization_vram, 2),
+                "qwen_alignment_vram_mb": round(qwen_alignment_vram, 2), # Explicit endpoint not fully injected since it's experimental, placeholder 0 unless added to DI
+            }
+        }
+    )

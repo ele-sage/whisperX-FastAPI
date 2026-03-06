@@ -30,7 +30,12 @@ class WhisperXDiarizationService:
         self.hf_token = hf_token
         self.model: Any = None
         self._model_device: str | None = None
+        self._vram_usage_bytes: float = 0.0
         self.logger = logger
+
+    def get_vram_usage(self) -> float:
+        """Get the estimated VRAM usage by this specific model instance in MB."""
+        return self._vram_usage_bytes / (1024 * 1024)
 
     def diarize(
         self,
@@ -61,15 +66,25 @@ class WhisperXDiarizationService:
 
                 # Clean up previous model if device changed
                 if self.model is not None:
+                    try:
+                        del self.model
+                    except AttributeError:
+                        pass
                     self.model = None
                     gc.collect()
                     torch.cuda.empty_cache()
+                    self._vram_usage_bytes = 0.0
+
+                vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
 
                 self.model = DiarizationPipeline(
                     use_auth_token=self.hf_token, device=device
                 )
                 self._model_device = device
-                self.logger.debug("Diarization model loaded successfully")
+                
+                vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+                self._vram_usage_bytes = max(0.0, vram_after - vram_before)
+                self.logger.debug(f"Diarization model loaded. VRAM footprint: {self.get_vram_usage():.2f} MB")
             else:
                 self.logger.debug("Reusing cached diarization model")
 
@@ -90,15 +105,23 @@ class WhisperXDiarizationService:
             hf_token: HuggingFace authentication token
         """
         self.logger.info(f"Loading diarization model on {device}")
-        self.hf_token = hf_token
+        vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
         self.model = DiarizationPipeline(use_auth_token=self.hf_token, device=device)
         self._model_device = device
+        
+        vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+        self._vram_usage_bytes = max(0.0, vram_after - vram_before)
 
     def unload_model(self) -> None:
         """Unload diarization model and free GPU memory."""
         if self.model:
+            try:
+                del self.model
+            except AttributeError:
+                pass
             self.model = None
             self._model_device = None
+            self._vram_usage_bytes = 0.0
             gc.collect()
             torch.cuda.empty_cache()
             self.logger.debug("Diarization model unloaded and GPU memory cleared")

@@ -26,7 +26,12 @@ class WhisperXAlignmentService:
         self.metadata: Any = None
         self._model_language: str | None = None
         self._model_device: str | None = None
+        self._vram_usage_bytes: float = 0.0
         self.logger = logger
+
+    def get_vram_usage(self) -> float:
+        """Get the estimated VRAM usage by this specific model instance in MB."""
+        return self._vram_usage_bytes / (1024 * 1024)
 
     def align(
         self,
@@ -76,13 +81,19 @@ class WhisperXAlignmentService:
                     self.metadata = None
                     gc.collect()
                     torch.cuda.empty_cache()
+                    self._vram_usage_bytes = 0.0
+
+                vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
 
                 self.model, self.metadata = load_align_model(
                     language_code=language_code, device=device, model_name=align_model
                 )
                 self._model_language = language_code
                 self._model_device = device
-                self.logger.debug("Alignment model loaded successfully")
+                
+                vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+                self._vram_usage_bytes = max(0.0, vram_after - vram_before)
+                self.logger.debug(f"Alignment model loaded. VRAM footprint: {self.get_vram_usage():.2f} MB")
             else:
                 self.logger.debug("Reusing cached alignment model")
 
@@ -112,11 +123,16 @@ class WhisperXAlignmentService:
             model_name: Specific model name to use (optional)
         """
         self.logger.info(f"Loading alignment model for {language_code} on {device}")
+        vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+        
         self.model, self.metadata = load_align_model(
             language_code=language_code, device=device, model_name=model_name
         )
         self._model_language = language_code
         self._model_device = device
+        
+        vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+        self._vram_usage_bytes = max(0.0, vram_after - vram_before)
 
     def unload_model(self) -> None:
         """Unload alignment model and free GPU memory."""
@@ -126,6 +142,7 @@ class WhisperXAlignmentService:
             self.metadata = None
         self._model_language = None
         self._model_device = None
+        self._vram_usage_bytes = 0.0
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.debug("Alignment model unloaded and GPU memory cleared")

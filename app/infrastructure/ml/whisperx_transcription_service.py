@@ -27,7 +27,12 @@ class WhisperXTranscriptionService:
         """Initialize the transcription service."""
         self.model: Any = None
         self._model_config: dict[str, Any] | None = None
+        self._vram_usage_bytes: float = 0.0
         self.logger = logger
+
+    def get_vram_usage(self) -> float:
+        """Get the estimated VRAM usage by this specific model instance in MB."""
+        return self._vram_usage_bytes / (1024 * 1024)
 
     def _should_reload(
         self,
@@ -107,6 +112,8 @@ class WhisperXTranscriptionService:
                     self.model = None
                     gc.collect()
                     torch.cuda.empty_cache()
+                    
+                vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
 
                 self.model = load_model(
                     model,
@@ -127,7 +134,10 @@ class WhisperXTranscriptionService:
                     "language": language,
                     "task": task,
                 }
-                self.logger.debug("Transcription model loaded successfully")
+                
+                vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+                self._vram_usage_bytes = max(0.0, vram_after - vram_before)
+                self.logger.debug(f"Transcription model loaded. VRAM footprint: {self.get_vram_usage():.2f} MB")
             else:
                 self.logger.debug("Reusing cached transcription model")
 
@@ -172,6 +182,8 @@ class WhisperXTranscriptionService:
             torch.set_num_threads(threads)
             faster_whisper_threads = threads
 
+        vram_before = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+
         self.model = load_model(
             model_name,
             device,
@@ -184,11 +196,15 @@ class WhisperXTranscriptionService:
             threads=faster_whisper_threads,
         )
 
+        vram_after = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0.0
+        self._vram_usage_bytes = max(0.0, vram_after - vram_before)
+
     def unload_model(self) -> None:
         """Unload WhisperX model and free GPU memory."""
         if self.model:
             self.model = None
             self._model_config = None
+            self._vram_usage_bytes = 0.0
             gc.collect()
             torch.cuda.empty_cache()
             self.logger.debug("Model unloaded and GPU memory cleared")
