@@ -295,7 +295,7 @@ def process_audio_common(
 
     try:
         start_time = datetime.now()
-        logger.info(
+        logger.debug(
             "Starting speech-to-text processing for identifier: %s",
             params.identifier,
         )
@@ -374,7 +374,7 @@ def process_audio_common(
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        logger.info(
+        logger.debug(
             "Completed speech-to-text processing for identifier: %s. Duration: %ss",
             params.identifier,
             duration,

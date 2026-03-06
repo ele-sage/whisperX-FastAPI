@@ -72,7 +72,7 @@ def process_audio_task(
 
     try:
         start_time = datetime.now()
-        logger.info(f"Starting {task_type} task for identifier {identifier}")
+        logger.debug(f"Starting {task_type} task for identifier {identifier}")
 
         result = audio_processor()
 
@@ -81,7 +81,7 @@ def process_audio_task(
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        logger.info(
+        logger.debug(
             f"Completed {task_type} task for identifier {identifier}. Duration: {duration}s"
         )
 

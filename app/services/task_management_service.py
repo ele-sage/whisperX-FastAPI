@@ -35,7 +35,7 @@ class TaskManagementService:
         """
         logger.debug("Creating new task: %s", task.uuid)
         identifier = self.repository.add(task)
-        logger.info("Task created with UUID: %s", identifier)
+        logger.debug("Task created with UUID: %s", identifier)
         return identifier
 
     def get_task(self, identifier: str) -> Task | None:
@@ -64,7 +64,7 @@ class TaskManagementService:
         """
         tasks = self.repository.get_by_ids(identifiers)
 
-        logger.info("Batch retrieved %d tasks out of %d requested", len(tasks), len(identifiers))
+        logger.debug("Batch retrieved %d tasks out of %d requested", len(tasks), len(identifiers))
         return tasks
 
     def get_all_tasks(self) -> list[Task]:
@@ -76,7 +76,7 @@ class TaskManagementService:
         """
         logger.debug("Retrieving all tasks")
         tasks = self.repository.get_all()
-        logger.info("Retrieved %d tasks", len(tasks))
+        logger.debug("Retrieved %d tasks", len(tasks))
         return tasks
 
     def delete_task(self, identifier: str) -> bool:
@@ -93,7 +93,7 @@ class TaskManagementService:
         result = self.repository.delete(identifier)
 
         if result:
-            logger.info("Task deleted successfully: %s", identifier)
+            logger.debug("Task deleted successfully: %s", identifier)
         else:
             logger.warning("Task not found for deletion: %s", identifier)
 
@@ -109,4 +109,4 @@ class TaskManagementService:
         """
         logger.debug("Updating task %s with data: %s", identifier, update_data.keys())
         self.repository.update(identifier, update_data)
-        logger.info("Task updated successfully: %s", identifier)
+        logger.debug("Task updated successfully: %s", identifier)
