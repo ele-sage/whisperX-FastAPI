@@ -72,8 +72,6 @@ class WhisperXAlignmentService:
 
                 # Clean up previous model if any
                 if self.model is not None:
-                    del self.model
-                    del self.metadata
                     self.model = None
                     self.metadata = None
                     gc.collect()
@@ -123,10 +121,8 @@ class WhisperXAlignmentService:
     def unload_model(self) -> None:
         """Unload alignment model and free GPU memory."""
         if self.model:
-            del self.model
             self.model = None
         if self.metadata:
-            del self.metadata
             self.metadata = None
         self._model_language = None
         self._model_device = None

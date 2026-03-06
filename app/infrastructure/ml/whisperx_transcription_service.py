@@ -104,7 +104,6 @@ class WhisperXTranscriptionService:
 
                 # Clean up previous model if any
                 if self.model is not None:
-                    del self.model
                     self.model = None
                     gc.collect()
                     torch.cuda.empty_cache()
@@ -188,7 +187,6 @@ class WhisperXTranscriptionService:
     def unload_model(self) -> None:
         """Unload WhisperX model and free GPU memory."""
         if self.model:
-            del self.model
             self.model = None
             self._model_config = None
             gc.collect()

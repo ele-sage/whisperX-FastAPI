@@ -61,7 +61,6 @@ class WhisperXDiarizationService:
 
                 # Clean up previous model if device changed
                 if self.model is not None:
-                    del self.model
                     self.model = None
                     gc.collect()
                     torch.cuda.empty_cache()
@@ -98,7 +97,6 @@ class WhisperXDiarizationService:
     def unload_model(self) -> None:
         """Unload diarization model and free GPU memory."""
         if self.model:
-            del self.model
             self.model = None
             self._model_device = None
             gc.collect()

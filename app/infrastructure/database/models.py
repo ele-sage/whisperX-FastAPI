@@ -41,9 +41,11 @@ class Task(Base):
     uuid: Mapped[str] = mapped_column(
         String,
         default=lambda: str(uuid4()),
+        index=True,
+        unique=True,
         comment="Universally unique identifier for each task",
     )
-    status: Mapped[str] = mapped_column(String, comment="Current status of the task")
+    status: Mapped[str] = mapped_column(String, index=True, comment="Current status of the task")
     result: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, comment="JSON data representing the result of the task"
     )
@@ -79,7 +81,7 @@ class Task(Base):
         String, nullable=True, comment="Error message, if any, associated with the task"
     )
     parent_task_id: Mapped[str | None] = mapped_column(
-        String, nullable=True, comment="UUID of the parent task for split audio child tasks"
+        String, nullable=True, index=True, comment="UUID of the parent task for split audio child tasks"
     )
     channel: Mapped[str | None] = mapped_column(
         String, nullable=True, comment="Audio channel identifier (e.g., 'left', 'right')"
