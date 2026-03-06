@@ -6,6 +6,7 @@ from app.core.warnings_filter import filter_warnings
 
 filter_warnings()
 
+import asyncio
 import logging  # noqa: E402
 import time  # noqa: E402
 from contextlib import asynccontextmanager  # noqa: E402
@@ -61,12 +62,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     logging.info("Application lifespan started - dependency container initialized")
 
+    from app.services.cleanup_service import periodic_task_cleanup
+
+    cleanup_task = asyncio.create_task(periodic_task_cleanup(days=7))
+
     save_openapi_json(app)
     generate_db_schema(Base.metadata.tables.values())
     yield
 
     # Clean up container on shutdown
     logging.info("Shutting down application")
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
 
 
 tags_metadata = [
